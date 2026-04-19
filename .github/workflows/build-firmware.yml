@@ -32,7 +32,7 @@ jobs:
           sudo timedatectl set-timezone "Asia/Shanghai"
 
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       
       - name: Setup Feeds
         working-directory: /home/runner/work/BoltWrt/BoltWrt
@@ -102,7 +102,7 @@ jobs:
 
       - name: Upload Firmware Artifacts
         if: steps.build.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: BoltWrt-Firmware
           path: |
