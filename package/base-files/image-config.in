@@ -190,7 +190,7 @@ if VERSIONOPT
 	config VERSION_REPO
 		string
 		prompt "Release repository"
-		default "https://mirrors.tuna.tsinghua.edu.cn/openwrt/releases/24.10.3"
+		default "https://mirrors.tuna.tsinghua.edu.cn/openwrt/releases/24.10.6"
 		help
 			This is the repository address embedded in the image, it defaults
 			to the trunk snapshot repo; the url may contain the following placeholders:
