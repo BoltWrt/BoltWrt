@@ -32,7 +32,7 @@ jobs:
           sudo timedatectl set-timezone "Asia/Shanghai"
 
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       
       - name: Setup Feeds
         working-directory: /home/runner/work/BoltWrt/BoltWrt
@@ -60,6 +60,9 @@ jobs:
 
           # 调整 rust 组件的 ci-llvm 下载选项、
           sed -i 's/--set=llvm\.download-ci-llvm=true/--set=llvm.download-ci-llvm=false/' feeds/packages/lang/rust/Makefile
+
+          # 清理无用的 feeds 配置文件
+          rm -rf feeds/packages/prometheus-node-exporter-lua
 
       - name: Normalizing Build Configuration
         id: normalize-config
@@ -102,7 +105,7 @@ jobs:
 
       - name: Upload Firmware Artifacts
         if: steps.build.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: BoltWrt-Firmware
           path: |
