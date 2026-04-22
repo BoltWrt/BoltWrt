@@ -62,7 +62,7 @@ jobs:
           sed -i 's/--set=llvm\.download-ci-llvm=true/--set=llvm.download-ci-llvm=false/' feeds/packages/lang/rust/Makefile
 
           # 清理无用的 feeds 配置文件
-          rm -rf feeds/packages/prometheus-node-exporter-lua
+          rm -rf package/feeds/packages/prometheus-node-exporter-lua
 
       - name: Normalizing Build Configuration
         id: normalize-config
