@@ -2,4 +2,4 @@ src-git packages https://github.com/openwrt/packages.git^ef7746c5e9ffc9ba128c4cf
 src-git luci https://github.com/openwrt/luci.git^edc454743e333d836a1e13fdc51149336d68ae18
 src-git routing https://github.com/openwrt/routing.git^840c78036b6400f5f203f75f0e0f43c0154c6773
 
-src-git-full BoltWrt https://github.com/BoltWrt/Packages.git^396afd73b5f544d83a1aee26f97c7d54e26e8581
+src-git-full BoltWrt https://github.com/BoltWrt/Packages.git^d5417b07cd01b6dc5e8d8898f53da1e2ef8c8a02
