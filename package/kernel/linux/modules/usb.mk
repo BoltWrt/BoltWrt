@@ -361,7 +361,6 @@ define KernelPackage/usb2
 	+TARGET_bcm47xx:kmod-usb-bcma \
 	+TARGET_bcm47xx:kmod-usb-ssb \
 	+TARGET_bcm53xx:kmod-usb-bcma \
-	+@(TARGET_bcm53xx):kmod-phy-bcm-ns-usb2 \
 	+TARGET_ath79:kmod-phy-ath79-usb \
 	+kmod-usb-ehci
   KCONFIG:=\
@@ -1806,7 +1805,6 @@ define KernelPackage/usb3
   DEPENDS:= \
 	+kmod-usb-xhci-hcd \
 	+TARGET_bcm53xx:kmod-usb-bcma \
-	+@(TARGET_bcm53xx):kmod-phy-bcm-ns-usb3 \
 	+TARGET_ramips_mt7621:kmod-usb-xhci-mtk \
 	+TARGET_mediatek:kmod-usb-xhci-mtk \
 	+TARGET_apm821xx_nand:kmod-usb-xhci-pci-renesas \

@@ -27,6 +27,7 @@ jobs:
           rm -rf feeds/packages/lang/golang
           mv feeds/BoltWrt/lang/golang feeds/packages/lang/golang
 
+          ./scripts/feeds update -i packages
           ./scripts/feeds install -a
 
           # 修改 LuCI 默认主题路径
@@ -44,6 +45,9 @@ jobs:
 
           # 调整 rust 组件的 ci-llvm 下载选项、
           sed -i 's/--set=llvm\.download-ci-llvm=true/--set=llvm.download-ci-llvm=false/' feeds/packages/lang/rust/Makefile
+
+          # 清理无用的 feeds 配置文件
+          rm -rf package/feeds/packages/prometheus-node-exporter-lua
 
           mv config.txt .config
 
