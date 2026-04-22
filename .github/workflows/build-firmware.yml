@@ -42,6 +42,9 @@ jobs:
           # 移除官方 golang 包并引入自定义版本
           rm -rf feeds/packages/lang/golang
           mv feeds/BoltWrt/lang/golang feeds/packages/lang/golang
+          # 移除官方 python 包并引入自定义版本
+          rm -rf feeds/packages/lang/python
+          mv feeds/BoltWrt/lang/python feeds/packages/lang/python
 
           ./scripts/feeds install -a
 
