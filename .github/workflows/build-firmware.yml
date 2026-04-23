@@ -32,7 +32,7 @@ jobs:
           sudo timedatectl set-timezone "Asia/Shanghai"
 
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       
       - name: Setup Feeds
         working-directory: /home/runner/work/BoltWrt/BoltWrt
@@ -42,7 +42,10 @@ jobs:
           # 移除官方 golang 包并引入自定义版本
           rm -rf feeds/packages/lang/golang
           mv feeds/BoltWrt/lang/golang feeds/packages/lang/golang
+          # 补充 python 额外组件
+          mv feeds/BoltWrt/lang/python/* feeds/packages/lang/python/
 
+          ./scripts/feeds update -i packages
           ./scripts/feeds install -a
 
           # 修改 LuCI 默认主题路径
@@ -61,13 +64,16 @@ jobs:
           # 调整 rust 组件的 ci-llvm 下载选项、
           sed -i 's/--set=llvm\.download-ci-llvm=true/--set=llvm.download-ci-llvm=false/' feeds/packages/lang/rust/Makefile
 
+          # 清理无用的 feeds 配置文件
+          rm -rf package/feeds/packages/prometheus-node-exporter-lua
+
       - name: Normalizing Build Configuration
         id: normalize-config
         working-directory: /home/runner/work/BoltWrt/BoltWrt
         run: |
           mv config.txt .config
           VERSION_HASH=$( (cat .config feeds.conf.default 2>/dev/null || true) | sha256sum | awk '{print $1}')
-          echo "VERSION_HASH=$VERSION_HASH" >> $GITHUB_ENV
+          echo "version_hash=$VERSION_HASH" >> $GITHUB_OUTPUT
           make defconfig
 
       - name: Restore DL Cache
@@ -75,7 +81,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: dl
-          key: boltwrt-dl-${{ env.VERSION_HASH }}
+          key: boltwrt-dl-${{ steps.normalize-config.outputs.version_hash }}
 
       - name: Fetch Sources
         id: fetch-sources
@@ -90,7 +96,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: dl
-          key: boltwrt-dl-${{ env.VERSION_HASH }}
+          key: boltwrt-dl-${{ steps.normalize-config.outputs.version_hash }}
 
       - name: Build Firmware
         id: build
@@ -102,7 +108,7 @@ jobs:
 
       - name: Upload Firmware Artifacts
         if: steps.build.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: BoltWrt-Firmware
           path: |
