@@ -4,11 +4,11 @@ include $(TOPDIR)/rules.mk
 
 ARCH:=arm
 BOARD:=mediatek
-BOARDNAME:=MediaTek Ralink ARM
+BOARDNAME:=MediaTek ARM
 SUBTARGETS:=filogic
 FEATURES:=dt-overlay emmc fpu gpio nand pci pcie rootfs-part separate_ramdisk squashfs usb
 
-KERNEL_PATCHVER:=5.15
+KERNEL_PATCHVER:=6.6
 
 include $(INCLUDE_DIR)/target.mk
 DEFAULT_PACKAGES += \

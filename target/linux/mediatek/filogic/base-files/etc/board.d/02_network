@@ -24,18 +24,6 @@ mediatek_setup_macs()
 	local wan_mac=""
 	local label_mac=""
 
-	case $board in
-	cmcc,rax3000m)
-		case "$(cmdline_get_var root)" in
-		/dev/mmc*)
-			wan_mac=$(mmc_get_mac_binary factory 0x2a)
-			lan_mac=$(mmc_get_mac_binary factory 0x24)
-			label_mac=$wan_mac
-		;;
-		esac
-		;;
-	esac
-
 	[ -n "$lan_mac" ] && ucidef_set_interface_macaddr "lan" $lan_mac
 	[ -n "$wan_mac" ] && ucidef_set_interface_macaddr "wan" $wan_mac
 	[ -n "$label_mac" ] && ucidef_set_label_macaddr $label_mac

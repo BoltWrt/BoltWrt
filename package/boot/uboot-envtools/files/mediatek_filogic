@@ -11,21 +11,41 @@ touch /etc/config/ubootenv
 
 board=$(board_name)
 
+ubootenv_add_mmc_default() {
+	local envdev="$(find_mmc_part "ubootenv" "${1:-mmcblk0}")"
+	ubootenv_add_uci_config "$envdev" "0x0" "0x40000" "0x40000" "1"
+	ubootenv_add_uci_config "$envdev" "0x40000" "0x40000" "0x40000" "1"
+}
+
+ubootenv_add_nor_default() {
+	local envdev="/dev/mtd$(find_mtd_index "u-boot-env")"
+	ubootenv_add_uci_config "$envdev" "0x0" "0x20000" "0x20000" "1"
+	ubootenv_add_uci_config "$envdev" "0x20000" "0x20000" "0x20000" "1"
+}
+
+ubootenv_add_ubi_default() {
+	. /lib/upgrade/nand.sh
+	local envubi=$(nand_find_ubi ubi)
+	local envdev=/dev/$(nand_find_volume $envubi ubootenv)
+	local envdev2=/dev/$(nand_find_volume $envubi ubootenv2)
+	ubootenv_add_uci_config "$envdev" "0x0" "0x1f000" "0x1f000" "1"
+	ubootenv_add_uci_config "$envdev2" "0x0" "0x1f000" "0x1f000" "1"
+}
+
 case "$board" in
 cmcc,rax3000m)
-	case "$(cmdline_get_var root)" in
-	/dev/mmc*)
-		local envdev=$(find_mmc_part "ubootenv" "mmcblk0")
-		ubootenv_add_uci_config "$envdev" "0x0" "0x40000" "0x40000" "1"
-		ubootenv_add_uci_config "$envdev" "0x40000" "0x40000" "0x40000" "1"
+	. /lib/upgrade/fit.sh
+	export_fitblk_bootdev
+	case "$CI_METHOD" in
+	ubi)
+		ubootenv_add_ubi_default
 		;;
-	*)
-		. /lib/upgrade/nand.sh
-		local envubi=$(nand_find_ubi ubi)
-		local envdev=/dev/$(nand_find_volume $envubi ubootenv)
-		local envdev2=/dev/$(nand_find_volume $envubi ubootenv2)
-		ubootenv_add_uci_config "$envdev" "0x0" "0x1f000" "0x1f000" "1"
-		ubootenv_add_uci_config "$envdev2" "0x0" "0x1f000" "0x1f000" "1"
+	emmc)
+		bootdev=${EMMC_KERN_DEV%%p[0-9]*}
+		ubootenv_add_mmc_default "${bootdev#/dev/}"
+		;;
+	default)
+		ubootenv_add_nor_default
 		;;
 	esac
 	;;
