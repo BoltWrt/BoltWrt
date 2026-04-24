@@ -18,9 +18,9 @@ jobs:
             config_path: config/targets/x86-64.txt
             artifact_name: BoltWrt-Firmware_x86-64
             target_dir: bin/targets/x86/64
-          - target: cmcc_rax3000m
-            config_path: config/targets/cmcc_rax3000m.txt
-            artifact_name: BoltWrt-Firmware_cmcc_rax3000m
+          - target: cmcc-rax3000m
+            config_path: config/targets/cmcc-rax3000m.txt
+            artifact_name: BoltWrt-Firmware_cmcc-rax3000m
             target_dir: bin/targets/mediatek/filogic
     steps:
       - name: Free up disk space
