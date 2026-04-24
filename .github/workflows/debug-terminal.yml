@@ -51,7 +51,5 @@ jobs:
           # 清理无用的 feeds 配置文件
           rm -rf package/feeds/packages/prometheus-node-exporter-lua
 
-          mv config.txt .config
-
       - name: Setup tmate session
         uses: mxschmitt/action-tmate@v3

@@ -8,8 +8,20 @@ on:
 
 jobs:
   build:
-    name: Build BoltWrt Firmware
+    name: Build BoltWrt Firmware (${{ matrix.target }})
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86-64
+            config_path: config/targets/x86-64.txt
+            artifact_name: BoltWrt-Firmware_x86-64
+            target_dir: bin/targets/x86/64
+          - target: cmcc_rax3000m
+            config_path: config/targets/cmcc_rax3000m.txt
+            artifact_name: BoltWrt-Firmware_cmcc_rax3000m
+            target_dir: bin/targets/mediatek/filogic
     steps:
       - name: Free up disk space
         uses: jlumbroso/free-disk-space@v1.3.1
@@ -71,7 +83,7 @@ jobs:
         id: normalize-config
         working-directory: /home/runner/work/BoltWrt/BoltWrt
         run: |
-          mv config.txt .config
+          mv ${{ matrix.config_path }} .config
           VERSION_HASH=$( (cat .config feeds.conf.default 2>/dev/null || true) | sha256sum | awk '{print $1}')
           echo "version_hash=$VERSION_HASH" >> $GITHUB_OUTPUT
           make defconfig
@@ -81,7 +93,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: dl
-          key: boltwrt-dl-${{ steps.normalize-config.outputs.version_hash }}
+          key: boltwrt-dl-${{ matrix.target }}-${{ steps.normalize-config.outputs.version_hash }}
 
       - name: Fetch Sources
         id: fetch-sources
@@ -96,7 +108,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: dl
-          key: boltwrt-dl-${{ steps.normalize-config.outputs.version_hash }}
+          key: boltwrt-dl-${{ matrix.target }}-${{ steps.normalize-config.outputs.version_hash }}
 
       - name: Build Firmware
         id: build
@@ -110,15 +122,9 @@ jobs:
         if: steps.build.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
-          name: BoltWrt-Firmware
+          name: ${{ matrix.artifact_name }}
           path: |
-            bin/targets/x86/64/boltwrt-x86-64-generic-squashfs-combined.img.gz
-            bin/targets/x86/64/boltwrt-x86-64-generic-squashfs-combined-efi.img.gz
-            bin/targets/x86/64/boltwrt-x86-64-generic-squashfs-combined.vmdk
-            bin/targets/x86/64/boltwrt-x86-64-generic-squashfs-combined-efi.vmdk
-            bin/targets/x86/64/boltwrt-x86-64-generic.manifest
-            bin/targets/x86/64/config.buildinfo
-            bin/targets/x86/64/feeds.buildinfo
+            ${{ matrix.target_dir }}/*
 
   release:
     name: Release Firmware
@@ -129,8 +135,9 @@ jobs:
       - name: Download Firmware Artifacts
         uses: actions/download-artifact@v4
         with:
-          name: BoltWrt-Firmware
+          pattern: BoltWrt-Firmware_*
           path: ./firmware
+          merge-multiple: true
 
       - name: Create Release
         id: create_release
