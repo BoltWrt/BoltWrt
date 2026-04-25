@@ -11,7 +11,7 @@ jobs:
     name: Build BoltWrt Firmware (${{ matrix.target }})
     runs-on: ubuntu-24.04
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         include:
           - target: x86-64
@@ -90,7 +90,7 @@ jobs:
 
       - name: Restore DL Cache
         id: restore-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: dl
           key: boltwrt-dl-${{ matrix.target }}-${{ steps.normalize-config.outputs.version_hash }}
@@ -105,7 +105,7 @@ jobs:
 
       - name: Cache DL Directory
         if: steps.restore-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: dl
           key: boltwrt-dl-${{ matrix.target }}-${{ steps.normalize-config.outputs.version_hash }}
@@ -133,7 +133,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Download Firmware Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: BoltWrt-Firmware_*
           path: ./firmware
@@ -141,7 +141,7 @@ jobs:
 
       - name: Create Release
         id: create_release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           name: BoltWrt ${{ github.ref_name }} Release
