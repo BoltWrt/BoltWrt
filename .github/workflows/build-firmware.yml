@@ -2,6 +2,12 @@ name: Build Firmware
 
 on:
   workflow_dispatch:
+    inputs:
+      debug_on_failure:
+        type: boolean
+        description: 'Open tmate session on build failure?'
+        required: false
+        default: false
   push:
     tags:
       - 'v*.*.*'
@@ -116,7 +122,17 @@ jobs:
         run: |
           echo "Using $(nproc) processors for building"
           make -j $(($(nproc)+1)) || make -j1 V=s
-          echo "Build completed successfully."
+          echo " ==============================="
+          echo " Build completed successfully."
+          echo " ==============================="
+          echo "Listing contents of bin/targets for debugging:"
+          tree bin/targets
+      
+      - name: Open Debug Session on Failure
+        if: failure() && github.event_name == 'workflow_dispatch' && inputs.debug_on_failure == 'true'
+        uses: mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: true
 
       - name: Upload Firmware Artifacts
         if: steps.build.outcome == 'success'
