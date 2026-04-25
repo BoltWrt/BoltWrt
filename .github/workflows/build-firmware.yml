@@ -121,7 +121,7 @@ jobs:
         working-directory: /home/runner/work/BoltWrt/BoltWrt
         run: |
           echo "Using $(nproc) processors for building"
-          make -j $(($(nproc)+1)) || make -j1 V=s
+          make -j$(nproc) || make -j1 V=s
           echo " ==============================="
           echo " Build completed successfully."
           echo " ==============================="
