@@ -126,7 +126,7 @@ jobs:
           echo " Build completed successfully."
           echo " ==============================="
           echo "Listing contents of bin/targets for debugging:"
-          tree bin/targets
+          tree -h -L 3 bin/targets
       
       - name: Open Debug Session on Failure
         if: failure() && github.event_name == 'workflow_dispatch' && inputs.debug_on_failure == 'true'
@@ -140,7 +140,7 @@ jobs:
         with:
           name: ${{ matrix.artifact_name }}
           path: |
-            ${{ matrix.target_dir }}/*
+            ${{ matrix.target_dir }}/boltwrt-*
 
   release:
     name: Release Firmware
@@ -153,7 +153,20 @@ jobs:
         with:
           pattern: BoltWrt-Firmware_*
           path: ./firmware
-          merge-multiple: true
+
+      - name: Package Firmware Archives
+        run: |
+          mkdir -p ./release
+          shopt -s nullglob
+
+          for artifact_dir in ./firmware/BoltWrt-Firmware_*; do
+            artifact_name=$(basename "$artifact_dir")
+            platform=${artifact_name#BoltWrt-Firmware_}
+            archive_path="./release/BoltWrt_${platform}_${{ github.ref_name }}.tar.gz"
+
+            tar -C "$artifact_dir" -czf "$archive_path" .
+            echo "Created $archive_path"
+          done
 
       - name: Create Release
         id: create_release
@@ -161,6 +174,6 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: BoltWrt ${{ github.ref_name }} Release
-          files: ./firmware/*
+          files: ./release/*.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
