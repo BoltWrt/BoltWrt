@@ -16,7 +16,7 @@ jobs:
           sudo timedatectl set-timezone "Asia/Shanghai"
 
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Setup Feeds
         working-directory: /home/runner/work/BoltWrt/BoltWrt
@@ -51,7 +51,8 @@ jobs:
           # 清理无用的 feeds 配置文件
           rm -rf package/feeds/packages/prometheus-node-exporter-lua
 
-          mv config.txt .config
-
       - name: Setup tmate session
         uses: mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: true
+

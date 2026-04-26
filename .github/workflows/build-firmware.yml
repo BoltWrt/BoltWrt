@@ -2,14 +2,32 @@ name: Build Firmware
 
 on:
   workflow_dispatch:
+    inputs:
+      debug_on_failure:
+        type: boolean
+        description: 'Open tmate session on build failure?'
+        required: false
+        default: false
   push:
     tags:
       - 'v*.*.*'
 
 jobs:
   build:
-    name: Build BoltWrt Firmware
+    name: Build BoltWrt Firmware (${{ matrix.target }})
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - target: x86-64
+            config_path: config/targets/x86-64.txt
+            artifact_name: BoltWrt-Firmware_x86-64
+            target_dir: bin/targets/x86/64
+          - target: cmcc-rax3000m
+            config_path: config/targets/cmcc-rax3000m.txt
+            artifact_name: BoltWrt-Firmware_cmcc-rax3000m
+            target_dir: bin/targets/mediatek/filogic
     steps:
       - name: Free up disk space
         uses: jlumbroso/free-disk-space@v1.3.1
@@ -71,17 +89,17 @@ jobs:
         id: normalize-config
         working-directory: /home/runner/work/BoltWrt/BoltWrt
         run: |
-          mv config.txt .config
+          mv ${{ matrix.config_path }} .config
           VERSION_HASH=$( (cat .config feeds.conf.default 2>/dev/null || true) | sha256sum | awk '{print $1}')
           echo "version_hash=$VERSION_HASH" >> $GITHUB_OUTPUT
           make defconfig
 
       - name: Restore DL Cache
         id: restore-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: dl
-          key: boltwrt-dl-${{ steps.normalize-config.outputs.version_hash }}
+          key: boltwrt-dl-${{ matrix.target }}-${{ steps.normalize-config.outputs.version_hash }}
 
       - name: Fetch Sources
         id: fetch-sources
@@ -93,32 +111,36 @@ jobs:
 
       - name: Cache DL Directory
         if: steps.restore-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: dl
-          key: boltwrt-dl-${{ steps.normalize-config.outputs.version_hash }}
+          key: boltwrt-dl-${{ matrix.target }}-${{ steps.normalize-config.outputs.version_hash }}
 
       - name: Build Firmware
         id: build
         working-directory: /home/runner/work/BoltWrt/BoltWrt
         run: |
           echo "Using $(nproc) processors for building"
-          make -j $(($(nproc)+1)) || make -j1 V=s
-          echo "Build completed successfully."
+          make -j$(nproc) || make -j1 V=s
+          echo " ==============================="
+          echo " Build completed successfully."
+          echo " ==============================="
+          echo "Listing contents of bin/targets for debugging:"
+          tree -h -L 3 bin/targets
+      
+      - name: Open Debug Session on Failure
+        if: failure() && github.event_name == 'workflow_dispatch' && inputs.debug_on_failure == 'true'
+        uses: mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: true
 
       - name: Upload Firmware Artifacts
         if: steps.build.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
-          name: BoltWrt-Firmware
+          name: ${{ matrix.artifact_name }}
           path: |
-            bin/targets/x86/64/boltwrt-x86-64-generic-squashfs-combined.img.gz
-            bin/targets/x86/64/boltwrt-x86-64-generic-squashfs-combined-efi.img.gz
-            bin/targets/x86/64/boltwrt-x86-64-generic-squashfs-combined.vmdk
-            bin/targets/x86/64/boltwrt-x86-64-generic-squashfs-combined-efi.vmdk
-            bin/targets/x86/64/boltwrt-x86-64-generic.manifest
-            bin/targets/x86/64/config.buildinfo
-            bin/targets/x86/64/feeds.buildinfo
+            ${{ matrix.target_dir }}/boltwrt-*
 
   release:
     name: Release Firmware
@@ -127,17 +149,31 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Download Firmware Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
-          name: BoltWrt-Firmware
+          pattern: BoltWrt-Firmware_*
           path: ./firmware
+
+      - name: Package Firmware Archives
+        run: |
+          mkdir -p ./release
+          shopt -s nullglob
+
+          for artifact_dir in ./firmware/BoltWrt-Firmware_*; do
+            artifact_name=$(basename "$artifact_dir")
+            platform=${artifact_name#BoltWrt-Firmware_}
+            archive_path="./release/BoltWrt_${platform}_${{ github.ref_name }}.tar.gz"
+
+            tar -C "$artifact_dir" -czf "$archive_path" .
+            echo "Created $archive_path"
+          done
 
       - name: Create Release
         id: create_release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           name: BoltWrt ${{ github.ref_name }} Release
-          files: ./firmware/*
+          files: ./release/*.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
