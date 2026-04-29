@@ -6,6 +6,7 @@ CONFIG_MODULES=y
 CONFIG_HAVE_DOT_CONFIG=y
 CONFIG_HOST_OS_LINUX=y
 # CONFIG_HOST_OS_MACOS is not set
+# CONFIG_TARGET_mediatek is not set
 CONFIG_TARGET_x86=y
 # CONFIG_TARGET_x86_generic is not set
 # CONFIG_TARGET_x86_legacy is not set
@@ -1766,33 +1767,14 @@ CONFIG_PACKAGE_libiwinfo-data=y
 # CONFIG_PACKAGE_ath10k-board-qca9984 is not set
 # CONFIG_PACKAGE_ath10k-board-qca99x0 is not set
 # CONFIG_PACKAGE_ath10k-firmware-qca4019 is not set
-# CONFIG_PACKAGE_ath10k-firmware-qca4019-ct is not set
-# CONFIG_PACKAGE_ath10k-firmware-qca4019-ct-full-htt is not set
-# CONFIG_PACKAGE_ath10k-firmware-qca4019-ct-htt is not set
 # CONFIG_PACKAGE_ath10k-firmware-qca6174 is not set
 # CONFIG_PACKAGE_ath10k-firmware-qca9377 is not set
 # CONFIG_PACKAGE_ath10k-firmware-qca9887 is not set
-# CONFIG_PACKAGE_ath10k-firmware-qca9887-ct is not set
-# CONFIG_PACKAGE_ath10k-firmware-qca9887-ct-full-htt is not set
 # CONFIG_PACKAGE_ath10k-firmware-qca9888 is not set
-# CONFIG_PACKAGE_ath10k-firmware-qca9888-ct is not set
-# CONFIG_PACKAGE_ath10k-firmware-qca9888-ct-full-htt is not set
-# CONFIG_PACKAGE_ath10k-firmware-qca9888-ct-htt is not set
 # CONFIG_PACKAGE_ath10k-firmware-qca988x is not set
-# CONFIG_PACKAGE_ath10k-firmware-qca988x-ct is not set
-# CONFIG_PACKAGE_ath10k-firmware-qca988x-ct-full-htt is not set
 # CONFIG_PACKAGE_ath10k-firmware-qca9984 is not set
-# CONFIG_PACKAGE_ath10k-firmware-qca9984-ct is not set
-# CONFIG_PACKAGE_ath10k-firmware-qca9984-ct-full-htt is not set
-# CONFIG_PACKAGE_ath10k-firmware-qca9984-ct-htt is not set
 # CONFIG_PACKAGE_ath10k-firmware-qca99x0 is not set
-# CONFIG_PACKAGE_ath10k-firmware-qca99x0-ct is not set
-# CONFIG_PACKAGE_ath10k-firmware-qca99x0-ct-full-htt is not set
-# CONFIG_PACKAGE_ath10k-firmware-qca99x0-ct-htt is not set
-# CONFIG_PACKAGE_ath11k-firmware-ipq6018 is not set
-# CONFIG_PACKAGE_ath11k-firmware-ipq8074 is not set
 # CONFIG_PACKAGE_ath11k-firmware-qca6390 is not set
-# CONFIG_PACKAGE_ath11k-firmware-qcn9074 is not set
 # CONFIG_PACKAGE_ath11k-firmware-wcn6750 is not set
 # CONFIG_PACKAGE_ath11k-firmware-wcn6855 is not set
 # CONFIG_PACKAGE_ath12k-firmware-wcn7850 is not set
@@ -2017,6 +1999,10 @@ CONFIG_PACKAGE_kmod-crypto-hash=y
 # CONFIG_PACKAGE_kmod-crypto-hw-hifn-795x is not set
 # CONFIG_PACKAGE_kmod-crypto-hw-padlock is not set
 # CONFIG_PACKAGE_kmod-crypto-kpp is not set
+CONFIG_PACKAGE_kmod-crypto-lib-chacha20=y
+CONFIG_PACKAGE_kmod-crypto-lib-chacha20poly1305=y
+CONFIG_PACKAGE_kmod-crypto-lib-curve25519=y
+CONFIG_PACKAGE_kmod-crypto-lib-poly1305=y
 # CONFIG_PACKAGE_kmod-crypto-manager is not set
 # CONFIG_PACKAGE_kmod-crypto-md4 is not set
 # CONFIG_PACKAGE_kmod-crypto-md5 is not set
@@ -2629,10 +2615,12 @@ CONFIG_PACKAGE_kmod-slhc=y
 # CONFIG_PACKAGE_kmod-tcp-scalable is not set
 # CONFIG_PACKAGE_kmod-tls is not set
 CONFIG_PACKAGE_kmod-tun=y
+CONFIG_PACKAGE_kmod-udptunnel4=y
+CONFIG_PACKAGE_kmod-udptunnel6=y
 # CONFIG_PACKAGE_kmod-veth is not set
 # CONFIG_PACKAGE_kmod-vrf is not set
 # CONFIG_PACKAGE_kmod-vxlan is not set
-# CONFIG_PACKAGE_kmod-wireguard is not set
+CONFIG_PACKAGE_kmod-wireguard=y
 # end of Network Support
 
 #
@@ -4938,7 +4926,7 @@ CONFIG_PACKAGE_luci-proto-ppp=y
 # CONFIG_PACKAGE_luci-proto-unet is not set
 # CONFIG_PACKAGE_luci-proto-vpnc is not set
 # CONFIG_PACKAGE_luci-proto-vxlan is not set
-# CONFIG_PACKAGE_luci-proto-wireguard is not set
+CONFIG_PACKAGE_luci-proto-wireguard=y
 # CONFIG_PACKAGE_luci-proto-yggdrasil is not set
 # end of 5. Protocols
 
@@ -4956,7 +4944,7 @@ CONFIG_PACKAGE_luci-lib-ip=y
 CONFIG_PACKAGE_luci-lib-jsonc=y
 CONFIG_PACKAGE_luci-lib-nixio=y
 # CONFIG_PACKAGE_luci-lib-px5g is not set
-# CONFIG_PACKAGE_luci-lib-uqr is not set
+CONFIG_PACKAGE_luci-lib-uqr=y
 # end of 6. Libraries
 
 # CONFIG_PACKAGE_luci-i18n-base-ar is not set
@@ -6074,7 +6062,7 @@ CONFIG_OCSERV_PROTOBUF=y
 # CONFIG_PACKAGE_vpnc-scripts is not set
 # CONFIG_PACKAGE_wgsd-client is not set
 # CONFIG_PACKAGE_wgsd-coredns is not set
-# CONFIG_PACKAGE_wireguard-tools is not set
+CONFIG_PACKAGE_wireguard-tools=y
 # CONFIG_PACKAGE_xl2tpd is not set
 # CONFIG_PACKAGE_zerotier is not set
 # end of VPN
@@ -6707,6 +6695,7 @@ CONFIG_PACKAGE_xray-core=y
 #
 CONFIG_PACKAGE_grub2-bios-setup=y
 # CONFIG_PACKAGE_grub2-editenv is not set
+# CONFIG_PACKAGE_uboot-envtools is not set
 # end of Boot Loaders
 
 #
