@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (C) 2006-2012 OpenWrt.org
+# Copyrights (C) 2019 - 2021 Rowsen Ltd. All Rights Reserved.
 
 . $IPKG_INSTROOT/lib/functions.sh
 . $IPKG_INSTROOT/lib/functions/service.sh

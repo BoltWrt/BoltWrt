@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2012-2015 OpenWrt.org
+# Copyrights (C) 2019 - 2021 Rowsen Ltd. All Rights Reserved.
 # Copyright (C) 2016 LEDE Project
 #
 # This is free software, licensed under the GNU General Public License v2.
@@ -26,7 +26,7 @@ PKG_CONFIG_DEPENDS += \
 sanitize = $(call tolower,$(subst _,-,$(subst $(space),-,$(1))))
 
 VERSION_NUMBER:=$(call qstrip,$(CONFIG_VERSION_NUMBER))
-VERSION_NUMBER:=$(if $(VERSION_NUMBER),$(VERSION_NUMBER),1.1.0)
+VERSION_NUMBER:=$(if $(VERSION_NUMBER),$(VERSION_NUMBER),1.2.0)
 
 VERSION_CODE:=$(call qstrip,$(CONFIG_VERSION_CODE))
 VERSION_CODE:=$(if $(VERSION_CODE),$(VERSION_CODE),stable)

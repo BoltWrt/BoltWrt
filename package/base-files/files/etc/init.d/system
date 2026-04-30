@@ -1,5 +1,5 @@
 #!/bin/sh /etc/rc.common
-# Copyright (C) 2014 OpenWrt.org
+# Copyrights (C) 2019 - 2021 Rowsen Ltd. All Rights Reserved.
 
 START=10
 USE_PROCD=1
@@ -7,7 +7,7 @@ USE_PROCD=1
 validate_system_section()
 {
 	uci_load_validate system system "$1" "$2" \
-		'hostname:string:OpenWrt' \
+		'hostname:string:BoltWrt' \
 		'conloglevel:uinteger' \
 		'buffersize:uinteger' \
 		'timezone:string:UTC' \

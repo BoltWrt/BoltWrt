@@ -1,4 +1,4 @@
-# Copyrights (C) 2019 - 2021 Rowsen Ltd. All Rights Reserved.
+# Copyright (C) 2006-2013 OpenWrt.org
 
 get_mac_binary() {
 	local path="$1"

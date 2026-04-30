@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (C) 2006-2019 OpenWrt.org
+# Copyrights (C) 2019 - 2021 Rowsen Ltd. All Rights Reserved.
 
 . /lib/functions/leds.sh
 

@@ -1,4 +1,4 @@
-# Makefile for OpenWrt
+# Makefile for BoltWrt
 #
 # Copyrights (C) 2019 - 2021 Rowsen Ltd. All Rights Reserved.
 #
@@ -14,7 +14,7 @@ export TOPDIR LC_ALL LANG TZ
 
 empty:=
 space:= $(empty) $(empty)
-$(if $(findstring $(space),$(TOPDIR)),$(error ERROR: The path to the OpenWrt directory must not include any spaces))
+$(if $(findstring $(space),$(TOPDIR)),$(error ERROR: The path to the BoltWrt directory must not include any spaces))
 
 world:
 

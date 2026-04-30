@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Copyright (C) 2013-2015 OpenWrt.org
+# Copyrights (C) 2019 - 2021 Rowsen Ltd. All Rights Reserved.
 #
 
 . /lib/functions/uci-defaults.sh
