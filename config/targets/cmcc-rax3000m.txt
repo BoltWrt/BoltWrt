@@ -401,7 +401,7 @@ CONFIG_PER_FEED_REPO=y
 CONFIG_FEED_packages=y
 CONFIG_FEED_luci=y
 CONFIG_FEED_routing=y
-CONFIG_FEED_BoltWrt=y
+CONFIG_FEED_BoltWrt=m
 
 #
 # Base system
