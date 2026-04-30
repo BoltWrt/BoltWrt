@@ -1,5 +1,5 @@
 #
-# Copyrights (C) 2019 - 2021 Rowsen Ltd. All Rights Reserved.
+# Copyright (C) 2006-2013 OpenWrt.org
 #
 # This is free software, licensed under the GNU General Public License v2.
 # See /LICENSE for more information.
@@ -12,8 +12,7 @@ PKG_VERSION:=1.9.1
 PKG_RELEASE:=2.1
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
-PKG_SOURCE_URL:=http://www.us.tcpdump.org/release/ \
-        http://www.tcpdump.org/release/
+PKG_SOURCE_URL:=http://www.tcpdump.org/release/
 PKG_HASH:=635237637c5b619bcceba91900666b64d56ecb7be63f298f601ec786ce087094
 PKG_FIXUP:=patch-libtool
 

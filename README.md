@@ -105,6 +105,33 @@ make -j$(nproc)
 - 次版本号: 做了向下兼容的功能性新增，
 - 修订号  : 做了向下兼容的问题修正。
 
+#### BoltWrt-1.2.5
+
+- 删除无用芯片支持
+- tcpdump:
+	1. Fix CVE-2018-16301
+	2. libpcap: Remove http://www.us.tcpdump.org mirror
+- wolfssl:
+	1. bump to 5.2.0
+	2. fix API breakage of SSL_get_verify_result
+	3. fix compilation with /dev/crypto
+- kernel:
+	1. bump 4.14 to 4.14.275
+	2. generic: reorder kernel config options
+	3. generic: add missing symbol for arm64 spectre mitigation
+- build: store SOURCE_DATE_EPOCH in JSON info files
+- mbedtls: Update to version 2.16.12
+- hostapd: Apply SAE/EAP-pwd side-channel attack update 2
+- ubus: backport fixes for UAF and other issues
+- imagebuilder: fix partition signature
+- base-files: call "sync" after initial setup
+- openssl: bump to 1.1.1n
+- zlib: backport security fix for a reproducible crash in compressor
+- patchelf: backport fix for rpath endianness
+- imagebuilder: fix broken image generation with external targets
+- mac80211: Update to version 4.19.237-1
+
+
 #### BoltWrt-1.2.4
 
 - openssl: 

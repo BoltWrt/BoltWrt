@@ -1,5 +1,5 @@
 #!/bin/sh /etc/rc.common
-# Copyrights (C) 2019 - 2021 Rowsen Ltd. All Rights Reserved.
+# Copyright (C) 2006-2011 OpenWrt.org
 
 START=10
 STOP=90
@@ -45,6 +45,7 @@ boot() {
 
 	/bin/config_generate
 	uci_apply_defaults
+	sync
 	
 	# temporary hack until configd exists
 	/sbin/reload_config

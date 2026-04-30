@@ -1,5 +1,5 @@
 #
-# Copyrights (C) 2019 - 2021 Rowsen Ltd. All Rights Reserved.
+# Copyright (C) 2006-2010 OpenWrt.org
 #
 # This is free software, licensed under the GNU General Public License v2.
 # See /LICENSE for more information.
@@ -532,6 +532,7 @@ define Device/Build/image
 	@mkdir -p $$(shell dirname $$@)
 	DEVICE_ID="$(DEVICE_NAME)" \
 	BIN_DIR="$(BIN_DIR)" \
+	SOURCE_DATE_EPOCH=$(SOURCE_DATE_EPOCH) \
 	IMAGE_NAME="$(IMAGE_NAME)" \
 	IMAGE_TYPE=$(word 1,$(subst ., ,$(2))) \
 	IMAGE_FILESYSTEM="$(1)" \
