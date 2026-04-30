@@ -1,0 +1,9 @@
+#!/bin/sh
+# Copyrights (C) 2019 - 2021 Rowsen Ltd. All Rights Reserved.
+# Copyright (C) 2010 Vertical Communications
+
+run_init() {
+	preinit_ip_deconfig
+}
+
+boot_hook_add preinit_main run_init

@@ -1,0 +1,12 @@
+#!/bin/sh /etc/rc.common
+# Copyrights (C) 2019 - 2021 Rowsen Ltd. All Rights Reserved.
+
+START=20
+USE_PROCD=1
+
+start_service()
+{
+	procd_open_instance
+	procd_set_param command "/sbin/usbmode" -s
+	procd_close_instance
+}

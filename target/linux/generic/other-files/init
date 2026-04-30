@@ -1,0 +1,4 @@
+#!/bin/sh
+# Copyrights (C) 2019 - 2021 Rowsen Ltd. All Rights Reserved.
+export INITRAMFS=1
+exec /sbin/init
