@@ -10,8 +10,6 @@
 PKG_CONFIG_DEPENDS += \
 	CONFIG_VERSION_HOME_URL \
 	CONFIG_VERSION_BUG_URL \
-	CONFIG_VERSION_NUMBER \
-	CONFIG_VERSION_CODE \
 	CONFIG_VERSION_REPO \
 	CONFIG_VERSION_DIST \
 	CONFIG_VERSION_MANUFACTURER \
@@ -22,11 +20,25 @@ PKG_CONFIG_DEPENDS += \
 
 sanitize = $(call tolower,$(subst _,-,$(subst $(space),-,$(1))))
 
-VERSION_NUMBER:=$(call qstrip,$(CONFIG_VERSION_NUMBER))
-VERSION_NUMBER:=$(if $(VERSION_NUMBER),$(VERSION_NUMBER),3.1.1)
+BOLTWRT_DEFAULT_VERSION?=dev
+BOLTWRT_TAG_PATTERN?=v*.*.*
+define boltwrt_get_git_tag
+if [ -n "$$GITHUB_REF" ]; then \
+	case "$$GITHUB_REF" in \
+		refs/tags/$(BOLTWRT_TAG_PATTERN)) printf '%s\n' "$${GITHUB_REF#refs/tags/}"; exit 0 ;; \
+	esac; \
+elif [ "$$GITHUB_REF_TYPE" = "tag" ] && [ -n "$$GITHUB_REF_NAME" ]; then \
+	case "$$GITHUB_REF_NAME" in \
+		$(BOLTWRT_TAG_PATTERN)) printf '%s\n' "$$GITHUB_REF_NAME"; exit 0 ;; \
+	esac; \
+fi; \
+git -C "$(TOPDIR)" describe --tags --exact-match --match '$(BOLTWRT_TAG_PATTERN)' 2>/dev/null
+endef
+BOLTWRT_GIT_TAG:=$(strip $(shell $(boltwrt_get_git_tag)))
+BOLTWRT_GIT_VERSION:=$(patsubst v%,%,$(BOLTWRT_GIT_TAG))
 
-VERSION_CODE:=$(call qstrip,$(CONFIG_VERSION_CODE))
-VERSION_CODE:=$(if $(VERSION_CODE),$(VERSION_CODE),stable)
+VERSION_NUMBER:=$(if $(BOLTWRT_GIT_VERSION),$(BOLTWRT_GIT_VERSION),$(BOLTWRT_DEFAULT_VERSION))
+VERSION_CODE:=$(if $(BOLTWRT_GIT_VERSION),stable,$(BOLTWRT_DEFAULT_VERSION))
 
 VERSION_REPO:=$(call qstrip,$(CONFIG_VERSION_REPO))
 VERSION_REPO:=$(if $(VERSION_REPO),$(VERSION_REPO),https://mirrors.tuna.tsinghua.edu.cn/openwrt/releases/24.10.6)
