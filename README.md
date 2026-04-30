@@ -100,9 +100,63 @@ make -j$(nproc)
 
 ### 版本策略
 
-- 主版本号：做了不兼容的 API 修改，
-- 次版本号：做了向下兼容的功能性新增，
-- 修订号  ：做了向下兼容的问题修正。
+- 主版本号:做了不兼容的 API 修改，
+- 次版本号:做了向下兼容的功能性新增，
+- 修订号  :做了向下兼容的问题修正。
+
+#### BoltWrt-1.2.2
+
+- 内核升级:升级至4.14.236
+- 模块更新: mbedtls: update to 2.16.10
+- 模块更新: openssl: bump to 1.1.1k
+- 模块更新: mac80211: Update to backports version 4.19.193-test1
+- 模块更新: openvpn: update to 2.4.11
+- 模块更新: ramips: backport unlocked mdiobus accessors
+- 模块更新: passwall
+- 模块更新: ssr-plus
+- 模块更新: Golang升级至1.16.6
+- 模块更新: https-dns-proxy: update to 2021-06-03-1
+- 模块更新: netdata: update to version 1.30.1
+- 组件更新: syslog-ng: update to 3.32.1
+- 组件更新: net/mosquitto: Update to 1.6.15
+- 组件更新: nano: update to 5.8
+- 组件更新: nextdns: Update to version 1.34.2
+- 组件更新: snort3: Backport stable version from 21.02
+- 组件更新: 升级各类组件和依赖数项,同时清理过期过时和无用的组件
+- 功能优化: reduce number of files passed to ipk-remove
+- 功能优化: generic: platform/mikrotik: release mtd device after use
+- 功能调整: call ipkg-remove using xargs if #args>=512
+- 功能调整: czmq: disable nss
+- 功能调整: python-dateutil: 
+	1. disable setuptools-scm for build
+	2. pin setuptools-scm version to 5.0.2
+- 功能调整: mwlwifi: add PKG_FLAGS:=nonshared
+- 功能调整: Revert "python-dateutil: disable setuptools-scm for build"
+- 功能调整: ddns-scripts: standardize required params declaration
+- 功能调整: prereq-build: test for perl's Data::Dumper
+- 功能调整: openwrt-keyring: 
+	1. add OpenWrt 21.02 GPG/usign keys
+	2. Only copy sign key for 19.07 and 21.02
+- 功能调整: mac80211: distance config: allow "auto" as a value
+- 功能调整: base-files: 
+	1. fix zoneinfo support 
+	2. fix /tmp/TZ when zoneinfo not installed
+- 功能调整: banip: remove logd dependency
+- 功能调整: xr_usb_serial_common: add PKG_MIRROR_HASH
+- 问题修复: build: package-ipkg: avoid calling wildcard twice
+- 问题修复: bundle-libraries.sh: fix broken SDK compiler
+- 问题修复: ppp/pppoe-discovery: fix -W option
+- 问题修复: ramips: mt7530 swconfig: fix race condition in register access
+- 问题修复: dropbear: Fix CVE-2020-36254
+- 问题修复: tplink-safeloader: fix C7v5 factory flashing from vendor fw > v1.1.x
+- 问题修复: tools/mklibs: Fix compile with GCC 11
+- 问题修复: ubox: fix init script validation of log_ip option
+- 问题修复: ath10k-ct: add security fixes
+- 问题修复: 修复一个编译报错信息
+- 问题修复: https-dns-proxy: 
+	1. bugfixes for dhcp server backup
+	2. bugfix: fallback to HTTP/1 by default
+- 问题修复: xr_usb_serial_common: fix build
 
 #### BoltWrt-1.2.1
 
@@ -116,6 +170,7 @@ make -j$(nproc)
 - 问题修复:修复几个功能的ui显示问题
 - 功能调整:清华大学软件源镜像站版本切换为19.07.7
 - 功能优化:vpn-policy-routing: better processing of custom user files
+
 
 #### BoltWrt-1.2.0
 
