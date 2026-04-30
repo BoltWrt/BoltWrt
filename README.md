@@ -12,7 +12,7 @@
 
 ## About BoltWrt - 关于BoltWrt
 
-BoltWrt是由我发起的路由器系统,它在OpenWrt的基础上,针对中国用户需求,添加了很多高级功能和特性.它的目标是打造一个高效,稳定,安全,易用的路由器系统.
+BoltWrt是一款嵌入式路由器系统,它在OpenWrt的基础上,针对中国的用户需求和网络环境,添加了很多高级功能和特性.它的目标是打造一个高效,稳定,安全,易用的路由器系统.
 
 从2021年元月开始,BoltWrt正式对外公布,BoltWrt团队在积极的开发和维护着它,同时BoltWrt是社区合作的成果,欢迎大家参与其中,贡献自己的力量.
 
@@ -103,6 +103,19 @@ make -j$(nproc)
 - 主版本号：做了不兼容的 API 修改，
 - 次版本号：做了向下兼容的功能性新增，
 - 修订号  ：做了向下兼容的问题修正。
+
+#### BoltWrt-1.2.1
+
+- 模块更新:wolfssl: 更新至 v4.7.0-stable
+- 模块更新:ninja: 更新至 1.10.2并支持CMake编译
+- 模块更新:nano: 更新至 5.6.1
+- 模块更新:libpam: 更新至 1.5.1
+- 模块更新:nextdns: 更新至 1.11.0
+- 问题修复:hostapd: P2P: Fix a corner case in peer addition based on PD Request
+- 问题修复:build: fix checks for GCC11
+- 问题修复:修复几个功能的ui显示问题
+- 功能调整:清华大学软件源镜像站版本切换为19.07.7
+- 功能优化:vpn-policy-routing: better processing of custom user files
 
 #### BoltWrt-1.2.0
 
