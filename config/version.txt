@@ -1,0 +1,15 @@
+# Product identity uses the upstream configuration mechanism.
+CONFIG_IMAGEOPT=y
+CONFIG_VERSIONOPT=y
+CONFIG_VERSION_DIST="BoltWrt"
+CONFIG_VERSION_NUMBER="4.0.0"
+CONFIG_VERSION_CODE="openwrt-25.12.6"
+CONFIG_VERSION_REPO="https://mirrors.tuna.tsinghua.edu.cn/openwrt/releases/25.12.6"
+CONFIG_VERSION_MANUFACTURER="BoltWrt"
+CONFIG_VERSION_MANUFACTURER_URL="https://github.com/BoltWrt/BoltWrt"
+CONFIG_VERSION_HOME_URL="https://github.com/BoltWrt/BoltWrt"
+CONFIG_VERSION_BUG_URL="https://github.com/BoltWrt/BoltWrt/issues"
+CONFIG_VERSION_SUPPORT_URL="https://github.com/BoltWrt/BoltWrt/discussions"
+CONFIG_VERSION_FIRMWARE_URL="https://github.com/BoltWrt/BoltWrt/releases"
+CONFIG_VERSION_FILENAMES=y
+# CONFIG_VERSION_CODE_FILENAMES is not set
