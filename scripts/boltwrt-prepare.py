@@ -237,7 +237,8 @@ def locked_source_links(root, repositories):
     return allowed
 
 
-def verify_links(root, winners, rejected, remove_rejected=False, require_winners=False):
+def verify_links(root, winners, rejected, remove_rejected=False, require_winners=False,
+                 required_sources=()):
     allowed = {root / "package/feeds" / feed / Path(source).name: {(root / source).resolve()}
                for source, feed in {**winners, **rejected}.items()}
     verify_package_tree(root, allowed)
@@ -250,8 +251,65 @@ def verify_links(root, winners, rejected, remove_rejected=False, require_winners
                 link.unlink()  # Only a positively identified locked competing provider.
         elif link.exists():
             raise PrepareError(f"refusing non-symlink provider path: {link}")
-        elif require_winners and source in winners:
+        elif source in winners and (require_winners or source in required_sources):
             raise PrepareError(f"selected provider was not installed: {source}")
+
+
+def positive_package_choices(root):
+    files = [root / "config/common.txt", *sorted((root / "config/targets").glob("*.txt"))]
+    if len(files) < 2 or not files[0].is_file():
+        raise PrepareError("product common.txt and target fragments are required to select feed roots")
+    choices = set()
+    for path in files:
+        for line in path.read_text().splitlines():
+            match = re.fullmatch(r"CONFIG_PACKAGE_([A-Za-z0-9_.+-]+)=[ym]", line)
+            if match:
+                choices.add(match[1])
+    return choices
+
+
+def product_roots(indexes, winners, choices):
+    return {source: feed for source, feed in winners.items()
+            if feed == "BoltWrt" or indexes[feed][source] & choices}
+
+
+def check_registration_scope(root, scope, preindex_links):
+    """Preserve older full-registration states instead of guessing their dependency closure.
+
+    Completed product-scoped preparations repeat in place. Changed product roots,
+    legacy full registration, and partially installed unrecorded states require a
+    clean build directory; their existing source links are never reset here.
+    """
+    verify_package_tree(root, preindex_links)
+    evidence_path = root / "logs/prepare-sources.json"
+    existing = any(link.is_symlink() for link in preindex_links)
+    if not existing:
+        return
+    if not evidence_path.is_file():
+        raise PrepareError("unrecorded feed registration preserved; use a clean build directory")
+    previous = json.loads(evidence_path.read_text())
+    if previous.get("registration_scope") != scope:
+        raise PrepareError("legacy or changed product registration preserved; use a clean build directory")
+    previous_sources = previous.get("selected_providers", {})
+    allowed = {root / "package/feeds" / feed / Path(source).name: {(root / source).resolve()}
+               for source, feed in previous_sources.items()}
+    verify_package_tree(root, allowed)
+    for link in allowed:
+        if not link.is_symlink():
+            raise PrepareError(f"recorded provider is missing; registration preserved: {link}")
+
+
+def reject_kconfig_errors(output):
+    diagnostic = re.search(
+        r"(?m)^(?:[^\n]*:[0-9]+:error:|(?:error:\s*)?recursive dependency detected!\s*$)", output)
+    if diagnostic:
+        raise PrepareError("Kconfig reported an error despite command success:\n" + output)
+
+
+def checked_make(root, env, *args):
+    output = run(["make", *args], root, env)
+    print(output, end="", flush=True)
+    reject_kconfig_errors(output)
 
 
 def make_environment(root):
@@ -283,6 +341,7 @@ def feeds_command(root, env, failures, *args):
     before = failures.stat().st_size if failures.exists() else 0
     output = run(["./scripts/feeds", *args], root, env)
     print(output, end="", flush=True)
+    reject_kconfig_errors(output)
     if failures.exists() and failures.stat().st_size != before:
         raise PrepareError(f"a make command inside scripts/feeds failed; see {failures}")
 
@@ -290,6 +349,9 @@ def feeds_command(root, env, failures, *args):
 def prepare(root, local_feed=None):
     lock_path = root / "config/source-lock.json"
     lock = json.loads(lock_path.read_text())
+    choices = positive_package_choices(root)
+    scope = {"mode": "product-roots-v1", "positive_package_choices": sorted(choices),
+             "source_lock_sha256": hashlib.sha256(lock_path.read_bytes()).hexdigest()}
     if "BoltWrt" not in lock["feeds"]:
         raise PrepareError("lock has no BoltWrt feed")
     validate_feed_config(root, lock)
@@ -338,27 +400,32 @@ def prepare(root, local_feed=None):
     env, failures = make_environment(root)
     # feeds update -i can itself run make defconfig. Reject stray build sources
     # before that first metadata scan, then tighten to the actual feed indexes.
-    verify_package_tree(root, locked_source_links(root, pending))
+    check_registration_scope(root, scope, locked_source_links(root, pending))
     feeds_command(root, env, failures, "update", "-i", *lock["feeds"])
     indexes = {name: source_index(root, name) for name in lock["feeds"]}
     winners, rejected = provider_plan(indexes)
+    roots = product_roots(indexes, winners, choices)
     verify_links(root, winners, rejected)
     verify_links(root, winners, rejected, remove_rejected=True)
-    # Do not feed overlapping official sources to install -a: smartdns and
-    # openwrt-smartdns differ as source names but provide the same binary package.
+    # Register declared products and every custom source, not unrelated official
+    # applications. feeds retains responsibility for recursive dependencies and
+    # virtual providers; variants inside a required source remain intact.
     for feed in ["BoltWrt"] + [name for name in indexes if name != "BoltWrt"]:
-        names = sorted(Path(source).name for source, owner in winners.items() if owner == feed)
+        names = sorted(Path(source).name for source, owner in roots.items() if owner == feed)
         if names:
             feeds_command(root, env, failures, "install", "-p", feed, *names)
-    verify_links(root, winners, rejected, remove_rejected=True, require_winners=True)
+    verify_links(root, winners, rejected, remove_rejected=True, required_sources=roots)
     # Rebuild metadata after removing identified competing dependency symlinks.
-    run(["make", "-s", "prepare-tmpinfo", "OPENWRT_BUILD="], root, env)
+    checked_make(root, env, "-s", "prepare-tmpinfo", "OPENWRT_BUILD=")
     if (root / ".config").exists():
-        run(["make", "defconfig"], root, env)
-    verify_links(root, winners, rejected, require_winners=True)
+        checked_make(root, env, "defconfig")
+    verify_links(root, winners, rejected, required_sources=roots)
+    installed = {source: feed for source, feed in winners.items()
+                 if (root / "package/feeds" / feed / Path(source).name).is_symlink()}
     evidence = {"source_lock_sha256": hashlib.sha256(lock_path.read_bytes()).hexdigest(),
                 "feeds": records, "patched_files_sha256": patch_hashes,
-                "selected_providers": winners, "excluded_overlapping_sources": rejected}
+                "registration_scope": scope, "requested_root_providers": roots,
+                "selected_providers": installed, "excluded_overlapping_sources": rejected}
     (root / "logs").mkdir(exist_ok=True)
     atomic_write(root / "logs/prepare-sources.json", (json.dumps(evidence, indent=2) + "\n").encode())
     print("Locked feeds prepared; evidence: logs/prepare-sources.json")

@@ -1,5 +1,6 @@
 """Failure-boundary checks; no network or firmware build is used here."""
 import importlib.util
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -166,6 +167,62 @@ class PrepareTests(unittest.TestCase):
         allowed = prepare.locked_source_links(self.root, [(target, {})])
         with self.assertRaisesRegex(prepare.PrepareError, "unknown build source"):
             prepare.verify_package_tree(self.root, allowed)
+
+    def test_product_roots_intersect_real_packages_from_all_targets(self):
+        config = self.root / "config"
+        (config / "targets").mkdir(parents=True)
+        (config / "common.txt").write_text(
+            "CONFIG_PACKAGE_web=y\nCONFIG_PACKAGE_web_OPTION=y\n# CONFIG_PACKAGE_weechat is not set\n")
+        (config / "targets/first.txt").write_text("CONFIG_PACKAGE_monitor=m\n")
+        (config / "targets/second.txt").write_text("CONFIG_PACKAGE_modem=y\n")
+        indexes = {"packages": {"feeds/packages/web": {"web"},
+                    "feeds/packages/weechat": {"weechat-minimal", "weechat-full"},
+                    "feeds/packages/monitor": {"monitor"}, "feeds/packages/modem": {"modem"}},
+                   "BoltWrt": {"feeds/BoltWrt/proxy": {"proxy"}}}
+        winners, _ = prepare.provider_plan(indexes)
+        roots = prepare.product_roots(indexes, winners, prepare.positive_package_choices(self.root))
+        self.assertEqual(set(roots), {"feeds/packages/web", "feeds/packages/monitor",
+                                     "feeds/packages/modem", "feeds/BoltWrt/proxy"})
+
+    def test_legacy_registration_preserved_and_scoped_registration_repeats(self):
+        source = self.root / "feeds/packages/unused"
+        source.mkdir(parents=True)
+        (source / "Makefile").write_text("$(eval $(call BuildPackage,unused))\n")
+        link = self.root / "package/feeds/packages/unused"
+        link.parent.mkdir(parents=True)
+        link.symlink_to(source)
+        scope = {"mode": "product-roots-v1", "positive_package_choices": ["web"]}
+        allowed = {link: {source.resolve()}}
+        with self.assertRaisesRegex(prepare.PrepareError, "clean build directory"):
+            prepare.check_registration_scope(self.root, scope, allowed)
+        self.assertTrue(link.is_symlink())
+        logs = self.root / "logs"
+        logs.mkdir()
+        record = {"registration_scope": scope,
+                  "selected_providers": {"feeds/packages/unused": "packages"}}
+        (logs / "prepare-sources.json").write_text(json.dumps(record))
+        prepare.check_registration_scope(self.root, scope, allowed)
+        with self.assertRaisesRegex(prepare.PrepareError, "changed product"):
+            prepare.check_registration_scope(self.root, {"mode": "changed"}, allowed)
+        self.assertTrue(link.is_symlink())
+        extra = self.root / "package/feeds/packages/extra"
+        extra.symlink_to(source)
+        with self.assertRaisesRegex(prepare.PrepareError, "unknown build source"):
+            prepare.check_registration_scope(self.root, scope, {**allowed, extra: {source.resolve()}})
+        self.assertTrue(extra.is_symlink())
+
+    def test_zero_exit_kconfig_error_is_rejected_from_feeds_and_make(self):
+        diagnostic = "tmp/.config-package.in:7:error: recursive dependency detected!"
+        (self.root / "scripts").mkdir()
+        script = self.root / "scripts/feeds"
+        script.write_text(f"#!/bin/sh\nprintf '%s\\n' '{diagnostic}'\nexit 0\n")
+        script.chmod(0o755)
+        with self.assertRaisesRegex(prepare.PrepareError, "Kconfig reported"):
+            prepare.feeds_command(self.root, dict(os.environ), self.root / "failures", "update", "-i")
+        (self.root / "Makefile").write_text(f"defconfig:\n\t@printf '%s\\n' '{diagnostic}'\n")
+        with self.assertRaisesRegex(prepare.PrepareError, "Kconfig reported"):
+            prepare.checked_make(self.root, dict(os.environ), "defconfig")
+        prepare.reject_kconfig_errors('warning: ordinary warning\nsource = "recursive dependency detected!"\n')
 
 
 if __name__ == "__main__":
