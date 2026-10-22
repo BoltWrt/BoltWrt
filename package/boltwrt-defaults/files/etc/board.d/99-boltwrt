@@ -1,0 +1,19 @@
+#!/bin/sh
+# Board defaults feed config_generate only when network/system are missing.
+# Existing UCI configuration restored by sysupgrade takes precedence.
+. /lib/functions/uci-defaults.sh
+
+board_config_update
+ucidef_set_interface lan ipaddr '10.126.0.1' netmask '255.255.192.0'
+ucidef_set_hostname 'BoltWrt'
+# Preserve an explicit board NTP list and never append on a repeated run.
+json_select_object system
+if ! json_is_a ntpserver array; then
+	json_add_array ntpserver
+	for server in ntp.aliyun.com time.nist.gov ntp.ubuntu.com time.windows.com; do
+		json_add_string '' "$server"
+	done
+	json_close_array
+fi
+json_select ..
+board_config_flush

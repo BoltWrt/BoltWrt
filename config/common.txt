@@ -1,0 +1,94 @@
+# BoltWrt functionality shared by both platforms. Version fields are in version.txt.
+CONFIG_PACKAGE_boltwrt-defaults=y
+CONFIG_TARGET_ROOTFS_SQUASHFS=y
+# CONFIG_TARGET_ROOTFS_EXT4FS is not set
+CONFIG_TARGET_SQUASHFS_BLOCK_SIZE=256
+CONFIG_TARGET_ROOTFS_TARGZ=y
+CONFIG_IPV6=y
+
+# Use one web server stack: nginx -> uwsgi -> LuCI, plus Argon.
+CONFIG_PACKAGE_luci-nginx=y
+CONFIG_PACKAGE_nginx-ssl=y
+CONFIG_PACKAGE_nginx-mod-luci=y
+CONFIG_PACKAGE_nginx-mod-ubus=y
+CONFIG_PACKAGE_nginx-ssl-util=y
+CONFIG_PACKAGE_luci-theme-argon=y
+CONFIG_PACKAGE_luci-compat=y
+CONFIG_PACKAGE_luci-lua-runtime=y
+CONFIG_PACKAGE_luci-mod-dashboard=y
+CONFIG_LUCI_LANG_zh_Hans=y
+CONFIG_LUCI_LANG_zh_Hant=y
+
+# Router services and administration.
+# CONFIG_PACKAGE_dnsmasq is not set
+CONFIG_PACKAGE_dnsmasq-full=y
+CONFIG_PACKAGE_dnsmasq_full_dhcp=y
+CONFIG_PACKAGE_dnsmasq_full_dhcpv6=y
+CONFIG_PACKAGE_dnsmasq_full_dnssec=y
+CONFIG_PACKAGE_dnsmasq_full_auth=y
+CONFIG_PACKAGE_dnsmasq_full_nftset=y
+CONFIG_PACKAGE_dnsmasq_full_conntrack=y
+CONFIG_PACKAGE_dnsmasq_full_noid=y
+CONFIG_PACKAGE_dnsmasq_full_tftp=y
+# CONFIG_PACKAGE_ip-tiny is not set
+CONFIG_PACKAGE_ip-full=y
+CONFIG_PACKAGE_curl=y
+CONFIG_PACKAGE_openssl-util=y
+CONFIG_PACKAGE_unzip=y
+CONFIG_PACKAGE_coreutils-base64=y
+CONFIG_PACKAGE_coreutils-nohup=y
+CONFIG_PACKAGE_luci-app-ddns=y
+CONFIG_PACKAGE_ddns-scripts-aliyun=y
+CONFIG_PACKAGE_ddns-scripts-services=y
+CONFIG_PACKAGE_luci-app-frpc=y
+CONFIG_PACKAGE_luci-app-ocserv=y
+CONFIG_PACKAGE_luci-app-openvpn=y
+CONFIG_PACKAGE_luci-app-smartdns=y
+CONFIG_PACKAGE_luci-app-sqm=y
+CONFIG_PACKAGE_luci-app-upnp=y
+CONFIG_PACKAGE_miniupnpd-nftables=y
+CONFIG_PACKAGE_luci-proto-wireguard=y
+CONFIG_PACKAGE_wireguard-tools=y
+CONFIG_PACKAGE_kmod-wireguard=y
+
+# Passwall2 client choices retained from 3.1.2; dependencies are resolved by feeds.
+CONFIG_PACKAGE_luci-app-passwall2=y
+CONFIG_PACKAGE_luci-app-passwall2_Nftables_Transparent_Proxy=y
+CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_Haproxy=y
+CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_Shadowsocks_Libev_Client=y
+CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_Shadowsocks_Rust_Client=y
+CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_ShadowsocksR_Libev_Client=y
+CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_Simple_Obfs=y
+CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_SingBox=y
+CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_V2ray_Plugin=y
+CONFIG_PACKAGE_v2ray-geoip=y
+CONFIG_PACKAGE_v2ray-geosite=y
+CONFIG_PACKAGE_geoview=y
+
+# Explicit service backends: LuCI pages alone do not establish availability.
+CONFIG_PACKAGE_ddns-scripts=y
+CONFIG_PACKAGE_frpc=y
+CONFIG_PACKAGE_ocserv=y
+CONFIG_PACKAGE_openvpn-openssl=y
+CONFIG_PACKAGE_smartdns=y
+CONFIG_PACKAGE_sqm-scripts=y
+CONFIG_PACKAGE_kmod-sched-cake=y
+CONFIG_PACKAGE_kmod-ifb=y
+CONFIG_PACKAGE_ppp=y
+CONFIG_PACKAGE_ppp-mod-pppoe=y
+CONFIG_PACKAGE_odhcp6c=y
+CONFIG_PACKAGE_odhcpd-ipv6only=y
+CONFIG_PACKAGE_firewall4=y
+CONFIG_PACKAGE_nftables-json=y
+CONFIG_PACKAGE_iptables-nft=y
+CONFIG_PACKAGE_iptables-mod-ipopt=y
+CONFIG_PACKAGE_xtables-nft=y
+CONFIG_PACKAGE_kmod-tun=y
+CONFIG_PACKAGE_xray-core=y
+CONFIG_PACKAGE_sing-box=y
+CONFIG_SINGBOX_WITH_CLASH_API=y
+CONFIG_SINGBOX_WITH_GVISOR=y
+CONFIG_SINGBOX_WITH_QUIC=y
+CONFIG_SINGBOX_WITH_TAILSCALE=y
+CONFIG_SINGBOX_WITH_UTLS=y
+CONFIG_SINGBOX_WITH_WIREGUARD=y
