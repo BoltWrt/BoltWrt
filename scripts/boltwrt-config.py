@@ -95,7 +95,13 @@ def main():
         temporary = ROOT / ".config.boltwrt-tmp"
         temporary.write_text(text)
         temporary.replace(ROOT / ".config")
-        subprocess.run(["make", "defconfig"], cwd=ROOT, check=True)
+        result = subprocess.run(["make", "defconfig"], cwd=ROOT, text=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        print(result.stdout, end="", flush=True)
+        result.check_returncode()
+        # The upstream make recipe can hide conf errors behind a successful status.
+        if re.search(r"(?m)^(?:[^\n]*:[0-9]+:error:|.*recursive dependency detected!)", result.stdout):
+            raise ValueError("Kconfig reported an error despite make's successful exit status")
     verify(args.target)
 
 
