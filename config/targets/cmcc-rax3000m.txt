@@ -1,0 +1,21 @@
+# The upstream profile supports RAX3000M/Me, NAND/eMMC and DDR3/DDR4.
+CONFIG_TARGET_mediatek=y
+CONFIG_TARGET_mediatek_filogic=y
+CONFIG_TARGET_mediatek_filogic_DEVICE_cmcc_rax3000m=y
+CONFIG_TARGET_ROOTFS_INITRAMFS=y
+CONFIG_TARGET_INITRAMFS_COMPRESSION_XZ=y
+CONFIG_TARGET_ROOTFS_INITRAMFS_SEPARATE=y
+CONFIG_TARGET_ROOTFS_PARTSIZE=128
+CONFIG_PACKAGE_u-boot-mt7981_cmcc_rax3000m-emmc-ddr3=y
+CONFIG_PACKAGE_u-boot-mt7981_cmcc_rax3000m-emmc-ddr4=y
+CONFIG_PACKAGE_u-boot-mt7981_cmcc_rax3000m-nand-ddr3=y
+CONFIG_PACKAGE_u-boot-mt7981_cmcc_rax3000m-nand-ddr4=y
+CONFIG_PACKAGE_block-mount=y
+CONFIG_PACKAGE_kmod-usb-storage-uas=y
+CONFIG_PACKAGE_kmod-fs-ext4=y
+CONFIG_PACKAGE_kmod-fs-exfat=y
+CONFIG_PACKAGE_kmod-fs-ntfs3=y
+CONFIG_PACKAGE_kmod-fs-vfat=y
+CONFIG_PACKAGE_luci-app-samba4=y
+CONFIG_PACKAGE_samba4-server=y
+CONFIG_PACKAGE_wsdd2=y
