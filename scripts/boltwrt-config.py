@@ -15,9 +15,9 @@ TARGETS = ("x86-64", "cmcc-rax3000m")
 def read_config(path):
     values = {}
     for number, line in enumerate(path.read_text().splitlines(), 1):
-        if match := re.fullmatch(r"(CONFIG_\w+)=(.+)", line):
+        if match := re.fullmatch(r"(CONFIG_[A-Za-z0-9_.+-]+)=(.+)", line):
             key, value = match.groups()
-        elif match := re.fullmatch(r"# (CONFIG_\w+) is not set", line):
+        elif match := re.fullmatch(r"# (CONFIG_[A-Za-z0-9_.+-]+) is not set", line):
             key, value = match[1], "n"
         elif not line.strip() or line.startswith("#"):
             continue
@@ -53,6 +53,8 @@ def verify(target):
         "CONFIG_USE_MUSL": "y",
         "CONFIG_PACKAGE_opkg": "n",
     }
+    if target == "cmcc-rax3000m":
+        required["CONFIG_WIFI_SCRIPTS_UCODE"] = "y"
     for key, value in required.items():
         if key in want and want[key] != value:
             raise ValueError(f"product config contradicts the 25.12 baseline: {key}")

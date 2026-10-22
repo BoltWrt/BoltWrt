@@ -1,108 +1,55 @@
-![OpenWrt logo](include/logo.png)
+# BoltWrt
 
-OpenWrt Project is a Linux operating system targeting embedded devices. Instead
-of trying to create a single, static firmware, OpenWrt provides a fully
-writable filesystem with package management. This frees you from the
-application selection and configuration provided by the vendor and allows you
-to customize the device through the use of packages to suit any application.
-For developers, OpenWrt is the framework to build an application without having
-to build a complete firmware around it; for users this means the ability for
-full customization, to use the device in ways never envisioned.
+BoltWrt 基于 OpenWrt 正式稳定版，迁回必要定制并维护平台配置、构建流程和升级兼容性。4.0.0 的基线是 OpenWrt **v25.12.6**，固定 commit `64900e756efa667774214f9c6b17c113222e01f7`，Linux **6.12.112**。这是从 24.10 / Linux 6.6 到 25.12 / Linux 6.12 的基础平台迁移，包管理器采用 APK，Wi-Fi 使用上游 ucode 实现。
 
-Sunshine!
+firewall4/nftables、WireGuard 和双平台支持是已有能力。4.0.0 保留 DNS、DDNS、透明代理、SQM、UPnP、OpenVPN、ocserv、frpc 等功能，并通过新版本依赖解析和最终固件 manifest 核对实际前后端。
 
-## Download
+## 构建
 
-Built firmware images are available for many architectures and come with a
-package selection to be used as WiFi home router. To quickly find a factory
-image usable to migrate from a vendor stock firmware to OpenWrt, try the
-*Firmware Selector*.
+使用具备 OpenWrt 构建依赖的 Linux、普通用户和区分大小写的文件系统。不要在主机上以 root 编译。macOS 上可在 Docker 的 Linux volume 内构建，不应直接使用大小写不敏感的目录作为构建区。
 
-* [OpenWrt Firmware Selector](https://firmware-selector.openwrt.org/)
-
-If your device is supported, please follow the **Info** link to see install
-instructions or consult the support resources listed below.
-
-## 
-
-An advanced user may require additional or specific package. (Toolchain, SDK, ...) For everything else than simple firmware download, try the wiki download page:
-
-* [OpenWrt Wiki Download](https://openwrt.org/downloads)
-
-## Development
-
-To build your own firmware you need a GNU/Linux, BSD or macOS system (case
-sensitive filesystem required). Cygwin is unsupported because of the lack of a
-case sensitive file system.
-
-### Requirements
-
-You need the following tools to compile OpenWrt, the package names vary between
-distributions. A complete list with distribution specific packages is found in
-the [Build System Setup](https://openwrt.org/docs/guide-developer/build-system/install-buildsystem)
-documentation.
-
-```
-binutils bzip2 diff find flex gawk gcc-6+ getopt grep install libc-dev libz-dev
-make4.1+ perl python3.7+ rsync subversion unzip which
+```sh
+python3 scripts/boltwrt-prepare.py
+python3 scripts/boltwrt-config.py x86-64
+DOWNLOAD_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/openwrt/sources/ make download -j6
+make -j4 V=s
+python3 scripts/boltwrt-verify.py x86-64
 ```
 
-### Quickstart
+RAX3000M/Me 使用独立干净构建目录，把目标参数换为 `cmcc-rax3000m`。准备脚本按 `config/source-lock.json` 抓取完整 SHA，验证子模块与已知补丁；不依赖旧版 Go/Python 覆盖或已有下载缓存。重复执行接受已知幂等补丁，遇到源版本、补丁锚点、未知修改或额外包提供者漂移时失败并保留原文件。`defconfig` 后逐项核对产品选择，阻止静默丢失组件或仅有 LuCI 页面而无后端。
 
-1. Run `./scripts/feeds update -a` to obtain all the latest package definitions
-   defined in feeds.conf / feeds.conf.default
+自定义 feed 改动目前仅在本地提交。未经允许不推送；在这些提交可从远端取得之前，本地干净构建需显式使用含锁定 commit 的 Packages 仓库：
 
-2. Run `./scripts/feeds install -a` to install symlinks for all obtained
-   packages into package/feeds/
+```sh
+python3 scripts/boltwrt-prepare.py --local-feed /absolute/path/to/Packages
+```
 
-3. Run `make menuconfig` to select your preferred configuration for the
-   toolchain, target system & firmware packages.
+该入口仅替换抓取位置，仍核对同一个 commit 和全部子模块 SHA。官方五项 feeds、工具链版本及自定义 feed/gitlink 固定值均见 `config/source-lock.json`。准备与配置证据写入忽略目录 `logs/`；实际固件在 `bin/targets/x86/64/` 或 `bin/targets/mediatek/filogic/`。
 
-4. Run `make` to build your firmware. This will download all sources, build the
-   cross-compile toolchain and then cross-compile the GNU/Linux kernel & all chosen
-   applications for your target system.
+## 平台和默认配置
 
-### Related Repositories
+| 平台 | 镜像与差异 |
+| --- | --- |
+| x86-64 | BIOS / UEFI；SquashFS IMG.gz 与 VMDK；32 MiB boot、384 MiB rootfs；Zabbix 及额外 DDNS providers |
+| RAX3000M/Me | Filogic；NAND / eMMC；DDR3 / DDR4 各自的启动文件；initramfs recovery FIT 与 sysupgrade FIT；USB 存储及 Samba |
 
-The main repository uses multiple sub-repositories to manage packages of
-different categories. All packages are installed via the OpenWrt package
-manager called `opkg`. If you're looking to develop the web interface or port
-packages to OpenWrt, please find the fitting repository below.
+RAX 各变体需匹配实际存储、DDR 和设备布局，不能互换 bootloader。共同 sysupgrade 镜像须小于保守的 104 MiB NAND 包体预算；这不替代坏块、UBI 余量及刷写实机验证。硬件映射和阈值依据见 [平台迁移说明](docs/4.0.0-platform.md)。
 
-* [LuCI Web Interface](https://github.com/openwrt/luci): Modern and modular
-  interface to control the device via a web browser.
+新装 LAN 为 `10.126.0.1/18`，默认 hostname 为 BoltWrt，使用预设 NTP；Web 由 nginx HTTPS、uwsgi、LuCI 和 Argon 提供。保留升级中的用户网络、主题与现有证书，不启用第二套 uhttpd 服务。
 
-* [OpenWrt Packages](https://github.com/openwrt/packages): Community repository
-  of ported packages.
+## 验证与升级边界
 
-* [OpenWrt Routing](https://github.com/openwrt/routing): Packages specifically
-  focused on (mesh) routing.
+4.0.0 正在开发与验收。容器配置语义测试、源码审查、编译、镜像检查和实机运行是不同证据。编译或静态检查通过不能证明 DHCP、PPPoE、IPv6 PD、DNS、代理、SQM、VPN、无线或保留配置升级可用。
 
-* [OpenWrt Video](https://github.com/openwrt/video): Packages specifically
-  focused on display servers and clients (Xorg and Wayland).
+本次升级验收范围仅为 **3.1.2 → 4.0.0**。旧 opkg/APK 状态、旧包二进制、内核模块及整个 overlay 不应迁移；需要保留的 UCI、自定义脚本、证书及用户数据必须按实际备份清单核对。阿里云 DDNS 的旧域名格式有专门迁移，见平台说明。2.x、3.0.x 等版本直升兼容性另行验证。
 
-## Support Information
+自有 APK 仓库、自动更新服务、发布资产完善、新设备和新 UI 不属于本次迁移范围。上游 APK 源不能提供 BoltWrt 自定义包，也不能保证匹配自编内核的模块；不得把上游更新能力视为定制固件已自动适配。
 
-For a list of supported devices see the [OpenWrt Hardware Database](https://openwrt.org/supported_devices)
+## 来源与许可证
 
-### Documentation
+- [OpenWrt](https://github.com/openwrt/openwrt)
+- [BoltWrt Packages](https://github.com/BoltWrt/Packages)
+- [Argon](https://github.com/jerrykuku/luci-theme-argon)
+- [SmartDNS](https://github.com/pymumu/smartdns)
 
-* [Quick Start Guide](https://openwrt.org/docs/guide-quick-start/start)
-* [User Guide](https://openwrt.org/docs/guide-user/start)
-* [Developer Documentation](https://openwrt.org/docs/guide-developer/start)
-* [Technical Reference](https://openwrt.org/docs/techref/start)
-
-### Support Community
-
-* [Forum](https://forum.openwrt.org): For usage, projects, discussions and hardware advise.
-* [Support Chat](https://webchat.oftc.net/#openwrt): Channel `#openwrt` on **oftc.net**.
-
-### Developer Community
-
-* [Bug Reports](https://bugs.openwrt.org): Report bugs in OpenWrt
-* [Dev Mailing List](https://lists.openwrt.org/mailman/listinfo/openwrt-devel): Send patches
-* [Dev Chat](https://webchat.oftc.net/#openwrt-devel): Channel `#openwrt-devel` on **oftc.net**.
-
-## License
-
-OpenWrt is licensed under GPL-2.0
+遵循 [GPL-2.0](COPYING) 及各组件各自的许可证。

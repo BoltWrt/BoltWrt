@@ -1,4 +1,7 @@
 # BoltWrt functionality shared by both platforms. Version fields are in version.txt.
+CONFIG_PER_FEED_REPO=y
+# No public BoltWrt APK repository is provisioned in this migration.
+CONFIG_FEED_BoltWrt=m
 CONFIG_PACKAGE_boltwrt-defaults=y
 CONFIG_TARGET_ROOTFS_SQUASHFS=y
 # CONFIG_TARGET_ROOTFS_EXT4FS is not set
