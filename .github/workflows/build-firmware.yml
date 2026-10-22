@@ -55,6 +55,9 @@ jobs:
             gcc-multilib g++-multilib gettext git libncurses-dev libssl-dev \
             python3-setuptools python3-pyelftools rsync swig unzip zlib1g-dev file wget qemu-utils
 
+      - name: Check source preparation invariants
+        run: python3 -m unittest discover -s scripts/tests -p 'test_boltwrt_*.py' -v
+
       - name: Prepare locked feeds
         run: python3 scripts/boltwrt-prepare.py
 

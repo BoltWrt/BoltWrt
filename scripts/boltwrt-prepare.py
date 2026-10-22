@@ -165,6 +165,37 @@ def submodule_urls(repo):
     return result
 
 
+def submodule_patches(repo, spec, children):
+    result = {}
+    if "net/openwrt-smartdns" in children:
+        result["net/openwrt-smartdns"] = {name: list(edits) for name, edits in SMARTDNS_PATCH.items()}
+    if "patch_manifest" not in spec:
+        return result
+    if not isinstance(spec["patch_manifest"], str):
+        raise PrepareError("patch_manifest must be a repository-relative path")
+    manifest_path = str(safe_relative(spec["patch_manifest"]))
+    # Read the committed object, never an ignored or substituted working file.
+    manifest = json.loads(run(["git", "show", f"HEAD:{manifest_path}"], repo))
+    if not isinstance(manifest, dict) or set(manifest) != {"submodules"} or not isinstance(manifest["submodules"], dict):
+        raise PrepareError("unsupported submodule patch manifest")
+    for path, item in manifest["submodules"].items():
+        safe_relative(path)
+        if (not isinstance(item, dict) or set(item) != {"commit", "files"}
+                or path not in children or item["commit"] != children[path]):
+            raise PrepareError(f"patch manifest source does not match locked gitlink: {path}")
+        if not isinstance(item["files"], dict) or not item["files"]:
+            raise PrepareError(f"patch manifest has no files: {path}")
+        for filename, replacements in item["files"].items():
+            safe_relative(filename)
+            if (not isinstance(replacements, list) or not replacements
+                    or any(not isinstance(edit, list) or len(edit) != 2
+                           or not all(isinstance(text, str) for text in edit) or not edit[0]
+                           for edit in replacements)):
+                raise PrepareError(f"invalid exact replacements: {path}/{filename}")
+            result.setdefault(path, {}).setdefault(filename, []).extend(replacements)
+    return result
+
+
 def source_index(root, feed):
     path = root / "feeds" / (feed + ".index")
     if not path.is_file():
@@ -373,6 +404,7 @@ def prepare(root, local_feed=None):
         pending.append((repo, expected))
         records[name] = {"commit": git(repo, "rev-parse", "HEAD"), "url": spec["url"], "effective_url": url}
         if children:
+            child_patch_sets = submodule_patches(repo, spec, children)
             urls = submodule_urls(repo)
             if set(urls) != set(children):
                 raise PrepareError(f"{name}: .gitmodules paths differ from lock")
@@ -387,7 +419,7 @@ def prepare(root, local_feed=None):
                 if child.is_dir() and not any(child.iterdir()):
                     child.rmdir()
                 checkout(child, urls[path], sha)
-                child_patches = SMARTDNS_PATCH if path == "net/openwrt-smartdns" else {}
+                child_patches = child_patch_sets.get(path, {})
                 pending.append((child, check_worktree(child, child_patches)))
                 records[name]["submodules"][path] = git(child, "rev-parse", "HEAD")
     patch_hashes = {}
