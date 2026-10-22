@@ -1,0 +1,40 @@
+#!/bin/sh
+# The former BoltWrt provider inferred the first label as RR. The official
+# provider requires RR@DOMAIN. Do not log domains, credentials or UCI contents.
+[ -f /etc/config/ddns ] || exit 0
+. /lib/functions.sh
+
+boltwrt_aliyun_status=0
+boltwrt_aliyun_batch=''
+
+boltwrt_migrate_aliyun() {
+	local section="$1" provider domain converted
+	config_get provider "$section" service_name
+	[ "$provider" = 'aliyun.com' ] || return 0
+	config_get domain "$section" domain
+	case "$domain" in
+		@.*) converted="@${domain#@.}" ;;
+		*@*) return 0 ;;
+		*.*) converted="${domain%%.*}@${domain#*.}" ;;
+		*) boltwrt_aliyun_status=1; return ;;
+	esac
+	# Reject unsupported legacy inputs instead of silently altering them.
+	case "$section" in ''|*[!a-zA-Z0-9_]*) boltwrt_aliyun_status=1; return ;; esac
+	case "$converted" in *[!a-zA-Z0-9_@.*-]*|*@|@|.*|*..*) boltwrt_aliyun_status=1; return ;; esac
+	boltwrt_aliyun_batch="${boltwrt_aliyun_batch}set ddns.${section}.domain='${converted}'
+"
+}
+
+config_load ddns || exit 1
+config_foreach boltwrt_migrate_aliyun service
+if [ "$boltwrt_aliyun_status" != 0 ]; then
+	logger -t boltwrt-defaults 'Aliyun migration requires review of an unsupported legacy domain; configuration retained'
+	exit 1
+fi
+[ -n "$boltwrt_aliyun_batch" ] || exit 0
+uci -q batch <<EOF_UCI
+$boltwrt_aliyun_batch
+EOF_UCI
+[ "$?" = 0 ] && uci -q commit ddns && exit 0
+logger -t boltwrt-defaults 'Aliyun migration could not save configuration; migration will retry'
+exit 1
