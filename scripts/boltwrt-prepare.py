@@ -80,12 +80,23 @@ def checkout(repo, url, commit, allowed_origins=()):
     if repo.is_symlink():
         raise PrepareError(f"feed checkout must not be a symlink: {repo}")
     if not repo.exists():
-        repo.mkdir(parents=True)
-        run(["git", "init", "--quiet", repo], repo.parent)
-        git(repo, "remote", "add", "origin", url)
-        git(repo, "fetch", "--depth=1", "--no-tags", "origin", commit)
-        git(repo, "checkout", "--detach", "--quiet", commit)
+        print(f"Fetching locked source {repo} @ {commit}", flush=True)
+        repo.parent.mkdir(parents=True, exist_ok=True)
+        # Publish only a complete checkout. A failed fetch leaves no unborn
+        # destination repository that a later run could mistake for user work.
+        with tempfile.TemporaryDirectory(prefix=f".{repo.name}.fetch-", dir=repo.parent) as temporary:
+            staged = Path(temporary) / "checkout"
+            run(["git", "init", "--quiet", staged], repo.parent)
+            git(staged, "remote", "add", "origin", url)
+            git(staged, "fetch", "--depth=1", "--no-tags", "origin", commit)
+            git(staged, "checkout", "--detach", "--quiet", commit)
+            if git(staged, "rev-parse", "HEAD") != commit:
+                raise PrepareError(f"{repo}: fetched object does not match lock")
+            if repo.exists() or repo.is_symlink():
+                raise PrepareError(f"destination appeared during fetch; refusing to replace: {repo}")
+            staged.rename(repo)
     else:
+        print(f"Checking locked source {repo} @ {commit}", flush=True)
         if not (repo / ".git").exists():
             raise PrepareError(f"refusing existing non-repository directory: {repo}")
         if Path(git(repo, "rev-parse", "--show-toplevel")).resolve() != repo.resolve():
@@ -97,6 +108,7 @@ def checkout(repo, url, commit, allowed_origins=()):
             raise PrepareError(f"{repo}: unexpected origin {origin!r}")
     if git(repo, "rev-parse", "HEAD") != commit:
         raise PrepareError(f"{repo}: fetched object does not match lock")
+    print(f"Locked source ready: {repo} @ {commit}", flush=True)
 
 
 def check_worktree(repo, patches, children=()):
@@ -187,7 +199,48 @@ def provider_plan(indexes):
     return winners, rejected
 
 
+def verify_package_tree(root, allowed):
+    """Enumerate build-visible paths, including unknown feeds and directory aliases."""
+    base = root / "package/feeds"
+    if base.is_symlink():
+        raise PrepareError(f"unknown package/feeds directory symlink: {base}")
+    if not base.exists():
+        return
+
+    def visit(path, ancestors):
+        if path.is_symlink() and path in allowed:
+            if path.resolve() not in allowed[path]:
+                raise PrepareError(f"unknown provider symlink: {path}")
+            return  # Locked source contents were checked separately.
+        if path.name == "Makefile" and path.is_file():
+            raise PrepareError(f"unknown build source in package/feeds: {path.parent}")
+        if path.is_dir():
+            identity = (path.stat().st_dev, path.stat().st_ino)
+            if identity in ancestors:
+                raise PrepareError(f"directory cycle in package/feeds: {path}")
+            for child in path.iterdir():
+                visit(child, ancestors | {identity})
+
+    visit(base, set())
+
+
+def locked_source_links(root, repositories):
+    """Pre-index allowlist from tracked Makefiles, never arbitrary working files."""
+    allowed = {}
+    for repo, _ in repositories:
+        feed = repo.relative_to(root / "feeds").parts[0]
+        for name in git(repo, "ls-tree", "-r", "--name-only", "HEAD").splitlines():
+            if Path(name).name == "Makefile":
+                source = repo / Path(name).parent
+                link = root / "package/feeds" / feed / source.name
+                allowed.setdefault(link, set()).add(source.resolve())
+    return allowed
+
+
 def verify_links(root, winners, rejected, remove_rejected=False, require_winners=False):
+    allowed = {root / "package/feeds" / feed / Path(source).name: {(root / source).resolve()}
+               for source, feed in {**winners, **rejected}.items()}
+    verify_package_tree(root, allowed)
     for source, feed in {**winners, **rejected}.items():
         link = root / "package/feeds" / feed / Path(source).name
         if link.is_symlink():
@@ -283,6 +336,9 @@ def prepare(root, local_feed=None):
                 atomic_write(path, content)
             patch_hashes[str(path.relative_to(root))] = hashlib.sha256(content).hexdigest()
     env, failures = make_environment(root)
+    # feeds update -i can itself run make defconfig. Reject stray build sources
+    # before that first metadata scan, then tighten to the actual feed indexes.
+    verify_package_tree(root, locked_source_links(root, pending))
     feeds_command(root, env, failures, "update", "-i", *lock["feeds"])
     indexes = {name: source_index(root, name) for name in lock["feeds"]}
     winners, rejected = provider_plan(indexes)
@@ -297,9 +353,9 @@ def prepare(root, local_feed=None):
     verify_links(root, winners, rejected, remove_rejected=True, require_winners=True)
     # Rebuild metadata after removing identified competing dependency symlinks.
     run(["make", "-s", "prepare-tmpinfo", "OPENWRT_BUILD="], root, env)
-    verify_links(root, winners, rejected, require_winners=True)
     if (root / ".config").exists():
         run(["make", "defconfig"], root, env)
+    verify_links(root, winners, rejected, require_winners=True)
     evidence = {"source_lock_sha256": hashlib.sha256(lock_path.read_bytes()).hexdigest(),
                 "feeds": records, "patched_files_sha256": patch_hashes,
                 "selected_providers": winners, "excluded_overlapping_sources": rejected}

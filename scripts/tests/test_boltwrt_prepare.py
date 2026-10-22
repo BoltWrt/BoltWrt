@@ -55,6 +55,29 @@ class PrepareTests(unittest.TestCase):
             prepare.check_worktree(repo, patches)
         self.assertIn("user's change", (repo / "Makefile").read_text())
 
+    def test_failed_fetch_does_not_poison_destination_and_can_retry(self):
+        origin = self.repo()
+        sha = self.git(origin, "rev-parse", "HEAD")
+        held_origin = self.root / "held-origin"
+        origin.rename(held_origin)
+        clone = self.root / "clone"
+        note = self.root / "user-note"
+        note.write_text("preserve")
+        with self.assertRaises(prepare.PrepareError):
+            prepare.checkout(clone, str(origin), sha)
+        self.assertFalse(clone.exists())
+        self.assertEqual(list(self.root.glob(".clone.fetch-*")), [])
+        self.assertEqual(note.read_text(), "preserve")
+        held_origin.rename(origin)
+        prepare.checkout(clone, str(origin), sha)
+        self.assertEqual(self.git(clone, "rev-parse", "HEAD"), sha)
+        unknown = self.root / "unknown"
+        unknown.mkdir()
+        (unknown / "note").write_text("preserve")
+        with self.assertRaisesRegex(prepare.PrepareError, "non-repository"):
+            prepare.checkout(unknown, str(origin), sha)
+        self.assertEqual((unknown / "note").read_text(), "preserve")
+
     def test_untracked_and_staged_changes_are_rejected(self):
         repo = self.repo()
         (repo / "user-note").write_text("preserve me")
@@ -107,6 +130,42 @@ class PrepareTests(unittest.TestCase):
         with self.assertRaisesRegex(prepare.PrepareError, "make command inside"):
             prepare.feeds_command(self.root, env, failures, "update", "-i")
         self.assertIn("missing-target", failures.read_text())
+
+    def test_unknown_build_links_and_directories_rejected_notes_preserved(self):
+        tree = self.root / "package/feeds/oldfeed"
+        tree.mkdir(parents=True)
+        note = tree / "note"
+        note.write_text("ordinary note")
+        prepare.verify_links(self.root, {}, {})
+        external = self.root / "external"
+        external.mkdir()
+        (external / "Makefile").write_text("$(eval $(call BuildPackage,evil))\n")
+        evil = tree / "evil"
+        evil.symlink_to(external)
+        with self.assertRaisesRegex(prepare.PrepareError, "unknown build source"):
+            prepare.verify_links(self.root, {}, {}, remove_rejected=True)
+        self.assertTrue(evil.is_symlink())
+        self.assertEqual(note.read_text(), "ordinary note")
+        evil.unlink()
+        evil.mkdir()
+        (evil / "Makefile").write_text("$(eval $(call BuildPackage,evil))\n")
+        with self.assertRaisesRegex(prepare.PrepareError, "unknown build source"):
+            prepare.verify_links(self.root, {}, {})
+        self.assertTrue((evil / "Makefile").is_file())
+
+    def test_preindex_allowlist_does_not_admit_untracked_makefiles(self):
+        repo = self.repo()
+        target = self.root / "feeds/BoltWrt"
+        target.parent.mkdir()
+        repo.rename(target)
+        (target / "injected").mkdir()
+        (target / "injected/Makefile").write_text("$(eval $(call BuildPackage,evil))\n")
+        link = self.root / "package/feeds/BoltWrt/injected"
+        link.parent.mkdir(parents=True)
+        link.symlink_to(target / "injected")
+        allowed = prepare.locked_source_links(self.root, [(target, {})])
+        with self.assertRaisesRegex(prepare.PrepareError, "unknown build source"):
+            prepare.verify_package_tree(self.root, allowed)
 
 
 if __name__ == "__main__":
