@@ -32,6 +32,17 @@ if [ "$boltwrt_aliyun_status" != 0 ]; then
 	exit 1
 fi
 [ -n "$boltwrt_aliyun_updates" ] || exit 0
+# -t still reads default deltas. Committing them from a private savedir would
+# leave them to be replayed by boot's global commit (including add_list).
+# Let boot commit pending DDNS changes, retain this script, then retry later.
+boltwrt_aliyun_pending="$(uci -q changes ddns)" || {
+	logger -t boltwrt-defaults 'Aliyun migration could not inspect pending changes; migration will retry'
+	exit 1
+}
+if [ -n "$boltwrt_aliyun_pending" ]; then
+	logger -t boltwrt-defaults 'Aliyun migration deferred for pending DDNS changes; migration will retry'
+	exit 1
+fi
 # -t selects our write directory; unlike -P it still permits commit. The
 # default delta read path remains available, but is never removed or reverted.
 # UCI batch returns success even if an individual set fails, so check each set.

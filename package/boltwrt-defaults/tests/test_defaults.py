@@ -85,7 +85,6 @@ class DefaultsTest(unittest.TestCase):
         self.service('first', 'home.example.com')
         self.service('second', 'v6.example.com')
         Path('/etc/config/system').write_text("config system 'main'\n option hostname 'original'\n")
-        run('uci', 'set', 'ddns.first.enabled=0')
         run('uci', 'set', 'system.main.hostname=PendingUserName')
         before = Path('/etc/config/ddns').read_bytes()
         deltas = {p.name: p.read_bytes() for p in Path('/tmp/.uci').glob('*')}
@@ -130,13 +129,47 @@ exec /usr/bin/uci "$@"
         run('uci', 'commit')
         self.assertEqual(get('ddns.first.domain'), 'home.example.com')
         self.assertEqual(get('ddns.second.domain'), 'v6.example.com')
-        self.assertEqual(get('ddns.first.enabled'), '0')
+        self.assertEqual(get('ddns.first.enabled'), '1')
         self.assertEqual(get('system.main.hostname'), 'PendingUserName')
         self.migrate()
         self.assertEqual(get('ddns.first.domain'), 'home@example.com')
         self.assertEqual(get('ddns.second.domain'), 'v6@example.com')
         migrated = Path('/etc/config/ddns').read_bytes()
         self.migrate()
+        self.assertEqual(migrated, Path('/etc/config/ddns').read_bytes())
+
+    def test_pending_ddns_defers_without_replay_or_duplicate_lists(self):
+        self.service('first', 'home.example.com')
+        run('uci', 'set', 'ddns.first.domain=pending.example.net')
+        run('uci', 'add_list', 'ddns.first.fixture_list=once')
+        run('uci', 'add_list', 'ddns.first.fixture_list=twice')
+        before = Path('/etc/config/ddns').read_bytes()
+        deltas = {p.name: p.read_bytes() for p in Path('/tmp/.uci').glob('*')}
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            logger = directory / 'logger'
+            logger.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$TEST_UCI_DIR/log"\n')
+            logger.chmod(0o755)
+            env = dict(os.environ, TEST_UCI_DIR=tmp, PATH=f'{tmp}:' + os.environ['PATH'])
+            result = self.migrate(check=False, env=env)
+            self.assertNotEqual(result.returncode, 0)
+            messages = result.stdout + result.stderr + (directory / 'log').read_text()
+            self.assertIn('deferred for pending DDNS changes', messages)
+            for secret in ['fixture-', 'pending.example.net', 'home.example.com']:
+                self.assertNotIn(secret, messages)
+        self.assertEqual(before, Path('/etc/config/ddns').read_bytes())
+        self.assertEqual(deltas, {p.name: p.read_bytes() for p in Path('/tmp/.uci').glob('*')})
+        run('uci', 'commit')
+        self.assertEqual(get('ddns.first.domain'), 'pending.example.net')
+        self.assertEqual(get('ddns.first.fixture_list').split(), ['once', 'twice'])
+        self.migrate()
+        self.assertEqual(get('ddns.first.domain'), 'pending@example.net')
+        run('uci', 'commit')
+        self.assertEqual(get('ddns.first.domain'), 'pending@example.net')
+        self.assertEqual(get('ddns.first.fixture_list').split(), ['once', 'twice'])
+        migrated = Path('/etc/config/ddns').read_bytes()
+        self.migrate()
+        run('uci', 'commit')
         self.assertEqual(migrated, Path('/etc/config/ddns').read_bytes())
 
     def test_legacy_conversion_and_credentials_preserved(self):
