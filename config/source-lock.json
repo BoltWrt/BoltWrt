@@ -1,0 +1,51 @@
+{
+  "version": "4.0.0",
+  "upstream": {
+    "url": "https://github.com/openwrt/openwrt.git",
+    "tag": "v25.12.6",
+    "commit": "64900e756efa667774214f9c6b17c113222e01f7",
+    "tree": "9d93e066ab34343839d7da1db96511208ee2c724",
+    "kernel": "6.12.112",
+    "gcc": "14.3.0",
+    "binutils": "2.44"
+  },
+  "feeds": {
+    "packages": {
+      "type": "src-git",
+      "url": "https://git.openwrt.org/feed/packages.git",
+      "commit": "093d551675b1119a06ef224d419905e8d6b2af1a"
+    },
+    "luci": {
+      "type": "src-git",
+      "url": "https://git.openwrt.org/project/luci.git",
+      "commit": "75a306df84a020c57a631ef5b4c02ace56d93387"
+    },
+    "routing": {
+      "type": "src-git",
+      "url": "https://git.openwrt.org/feed/routing.git",
+      "commit": "48c808034414a2112cf9d5261a20a320e8d0d170"
+    },
+    "telephony": {
+      "type": "src-git",
+      "url": "https://git.openwrt.org/feed/telephony.git",
+      "commit": "2618106d5846a4a542fdf5809f0d3ed228ce439b"
+    },
+    "video": {
+      "type": "src-git",
+      "url": "https://github.com/openwrt/video.git",
+      "commit": "094bf58da6682f895255a35a84349a79dab4bf95"
+    },
+    "BoltWrt": {
+      "type": "src-git",
+      "url": "https://github.com/BoltWrt/Packages.git",
+      "commit": "3e4c08da1309ffe929c87d6e642fe65f0517220d"
+    }
+  },
+  "submodules": {
+    "BoltWrt": {
+      "luci/theme/luci-theme-argon": "f075cb18cb83d0108a18f79b17888420e3d2d986",
+      "net/openwrt-smartdns": "5cdbd394a29b8b24659c116c49e0565e98d78305",
+      "luci/applications/luci-app-smartdns": "53c00a368f78cda75486d1551de536fc2e1884f1"
+    }
+  }
+}
