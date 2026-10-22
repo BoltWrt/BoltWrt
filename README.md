@@ -11,10 +11,12 @@ firewall4/nftables、WireGuard 和双平台支持是已有能力。4.0.0 保留 
 ```sh
 python3 scripts/boltwrt-prepare.py
 python3 scripts/boltwrt-config.py x86-64
-DOWNLOAD_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/openwrt/sources/ make download -j6
+DOWNLOAD_MIRROR=https://sources.cdn.openwrt.org make download -j6
 make -j4 V=s
 python3 scripts/boltwrt-verify.py x86-64
 ```
+
+源码归档优先使用 OpenWrt 官方缓存；缓存未命中时，下载器继续使用各 recipe 的源地址。全部归档仍须符合固定校验值。
 
 RAX3000M/Me 使用独立干净构建目录，把目标参数换为 `cmcc-rax3000m`。准备脚本按 `config/source-lock.json` 抓取完整 SHA，验证子模块与已知补丁；不依赖旧版 Go/Python 覆盖或已有下载缓存。重复执行接受已知幂等补丁，遇到源版本、补丁锚点、未知修改或额外包提供者漂移时失败并保留原文件。`defconfig` 后逐项核对产品选择，阻止静默丢失组件或仅有 LuCI 页面而无后端。
 

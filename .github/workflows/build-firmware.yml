@@ -29,7 +29,7 @@ jobs:
     env:
       GOPROXY: https://goproxy.cn,direct
       GOSUMDB: sum.golang.google.cn
-      DOWNLOAD_MIRROR: https://mirrors.tuna.tsinghua.edu.cn/openwrt/sources/
+      DOWNLOAD_MIRROR: https://sources.cdn.openwrt.org
     steps:
       - name: Free runner build space
         uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
