@@ -114,7 +114,7 @@ def main():
                     f"artifact content differs from profile: {path.name}")
             record["images"][path.name] = {"bytes": path.stat().st_size, "sha256": item["sha256"]}
     if args.target == "x86-64":
-        require("zabbix-agentd-openssl" in packages, "x86 monitoring package lost")
+        require("zabbix-agentd-basic" in packages, "x86 TLS monitoring package lost")
         for suffix, efi in (("generic-squashfs-combined.img.gz", False),
                             ("generic-squashfs-combined-efi.img.gz", True)):
             path = directory / ("boltwrt-4.0.0-x86-64-" + suffix)

@@ -71,7 +71,7 @@ jobs:
         run: make download -j6
 
       - name: Build firmware
-        run: make -j"$(nproc)" V=s
+        run: make -j"$(nproc)" V=s CONFIG_AUTOREMOVE=y
 
       - name: Check actual packages and image layouts
         run: python3 scripts/boltwrt-verify.py '${{ matrix.target }}'
