@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import tempfile
 import unittest
 
 if not Path("/.dockerenv").is_file():
@@ -77,8 +78,99 @@ class DefaultsTest(unittest.TestCase):
             f.write(f"config service {section}\n option service_name '{provider}'\n option domain '{domain}'\n"
                     " option username 'fixture-access-key'\n option password 'fixture-secret'\n option enabled '1'\n")
 
-    def migrate(self, check=True):
-        return run('bash', str(FILES / 'uci-defaults/95-boltwrt-aliyun'), check=check)
+    def migrate(self, check=True, env=None):
+        return run('bash', str(FILES / 'uci-defaults/95-boltwrt-aliyun'), check=check, env=env)
+
+    def test_second_set_failure_is_isolated_from_boot_commit(self):
+        self.service('first', 'home.example.com')
+        self.service('second', 'v6.example.com')
+        Path('/etc/config/system').write_text("config system 'main'\n option hostname 'original'\n")
+        run('uci', 'set', 'system.main.hostname=PendingUserName')
+        before = Path('/etc/config/ddns').read_bytes()
+        deltas = {p.name: p.read_bytes() for p in Path('/tmp/.uci').glob('*')}
+        private_before = set(Path('/tmp').glob('boltwrt-aliyun.*'))
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            # Delegate every operation to native UCI. Fail the second set via a
+            # genuine missing-section lookup after the first delta was saved.
+            wrapper = directory / 'uci'
+            wrapper.write_text('''#!/bin/bash
+for arg in "$@"; do
+    if [ "$arg" = set ]; then
+        if [ -f "$TEST_UCI_DIR/first-staged" ]; then
+            exec /usr/bin/uci -q -t "$savedir" set ddns.missing.domain=failure
+        fi
+        /usr/bin/uci "$@" || exit $?
+        [ -s "$savedir/ddns" ] || exit 99
+        touch "$TEST_UCI_DIR/first-staged"
+        exit 0
+    fi
+    if [ "$previous" = -t ]; then savedir="$arg"; fi
+    previous="$arg"
+done
+exec /usr/bin/uci "$@"
+''')
+            wrapper.chmod(0o755)
+            logger = directory / 'logger'
+            logger.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$TEST_UCI_DIR/log"\n')
+            logger.chmod(0o755)
+            env = dict(os.environ, TEST_UCI_DIR=tmp, PATH=f'{tmp}:' + os.environ['PATH'])
+            result = self.migrate(check=False, env=env)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertTrue((directory / 'first-staged').exists())
+            messages = result.stdout + result.stderr + (directory / 'log').read_text()
+            self.assertIn('migration will retry', messages)
+            for secret in ['fixture-', 'home.example.com', 'v6.example.com', 'home@example.com']:
+                self.assertNotIn(secret, messages)
+        self.assertEqual(before, Path('/etc/config/ddns').read_bytes())
+        self.assertEqual(deltas, {p.name: p.read_bytes() for p in Path('/tmp/.uci').glob('*')})
+        self.assertEqual(private_before, set(Path('/tmp').glob('boltwrt-aliyun.*')))
+        # boot runs this even when the defaults script exits nonzero.
+        run('uci', 'commit')
+        self.assertEqual(get('ddns.first.domain'), 'home.example.com')
+        self.assertEqual(get('ddns.second.domain'), 'v6.example.com')
+        self.assertEqual(get('ddns.first.enabled'), '1')
+        self.assertEqual(get('system.main.hostname'), 'PendingUserName')
+        self.migrate()
+        self.assertEqual(get('ddns.first.domain'), 'home@example.com')
+        self.assertEqual(get('ddns.second.domain'), 'v6@example.com')
+        migrated = Path('/etc/config/ddns').read_bytes()
+        self.migrate()
+        self.assertEqual(migrated, Path('/etc/config/ddns').read_bytes())
+
+    def test_pending_ddns_defers_without_replay_or_duplicate_lists(self):
+        self.service('first', 'home.example.com')
+        run('uci', 'set', 'ddns.first.domain=pending.example.net')
+        run('uci', 'add_list', 'ddns.first.fixture_list=once')
+        run('uci', 'add_list', 'ddns.first.fixture_list=twice')
+        before = Path('/etc/config/ddns').read_bytes()
+        deltas = {p.name: p.read_bytes() for p in Path('/tmp/.uci').glob('*')}
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            logger = directory / 'logger'
+            logger.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$TEST_UCI_DIR/log"\n')
+            logger.chmod(0o755)
+            env = dict(os.environ, TEST_UCI_DIR=tmp, PATH=f'{tmp}:' + os.environ['PATH'])
+            result = self.migrate(check=False, env=env)
+            self.assertNotEqual(result.returncode, 0)
+            messages = result.stdout + result.stderr + (directory / 'log').read_text()
+            self.assertIn('deferred for pending DDNS changes', messages)
+            for secret in ['fixture-', 'pending.example.net', 'home.example.com']:
+                self.assertNotIn(secret, messages)
+        self.assertEqual(before, Path('/etc/config/ddns').read_bytes())
+        self.assertEqual(deltas, {p.name: p.read_bytes() for p in Path('/tmp/.uci').glob('*')})
+        run('uci', 'commit')
+        self.assertEqual(get('ddns.first.domain'), 'pending.example.net')
+        self.assertEqual(get('ddns.first.fixture_list').split(), ['once', 'twice'])
+        self.migrate()
+        self.assertEqual(get('ddns.first.domain'), 'pending@example.net')
+        run('uci', 'commit')
+        self.assertEqual(get('ddns.first.domain'), 'pending@example.net')
+        self.assertEqual(get('ddns.first.fixture_list').split(), ['once', 'twice'])
+        migrated = Path('/etc/config/ddns').read_bytes()
+        self.migrate()
+        run('uci', 'commit')
+        self.assertEqual(migrated, Path('/etc/config/ddns').read_bytes())
 
     def test_legacy_conversion_and_credentials_preserved(self):
         self.service('host', 'home.example.com')
