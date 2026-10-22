@@ -5,7 +5,7 @@
 . /lib/functions.sh
 
 boltwrt_aliyun_status=0
-boltwrt_aliyun_batch=''
+boltwrt_aliyun_updates=''
 
 boltwrt_migrate_aliyun() {
 	local section="$1" provider domain converted
@@ -21,7 +21,7 @@ boltwrt_migrate_aliyun() {
 	# Reject unsupported legacy inputs instead of silently altering them.
 	case "$section" in ''|*[!a-zA-Z0-9_]*) boltwrt_aliyun_status=1; return ;; esac
 	case "$converted" in *[!a-zA-Z0-9_@.*-]*|*@|@|.*|*..*) boltwrt_aliyun_status=1; return ;; esac
-	boltwrt_aliyun_batch="${boltwrt_aliyun_batch}set ddns.${section}.domain='${converted}'
+	boltwrt_aliyun_updates="${boltwrt_aliyun_updates}${section}=${converted}
 "
 }
 
@@ -31,10 +31,25 @@ if [ "$boltwrt_aliyun_status" != 0 ]; then
 	logger -t boltwrt-defaults 'Aliyun migration requires review of an unsupported legacy domain; configuration retained'
 	exit 1
 fi
-[ -n "$boltwrt_aliyun_batch" ] || exit 0
-uci -q batch <<EOF_UCI
-$boltwrt_aliyun_batch
+[ -n "$boltwrt_aliyun_updates" ] || exit 0
+# -t selects our write directory; unlike -P it still permits commit. The
+# default delta read path remains available, but is never removed or reverted.
+# UCI batch returns success even if an individual set fails, so check each set.
+boltwrt_aliyun_savedir="$(mktemp -d /tmp/boltwrt-aliyun.XXXXXX)" || {
+	logger -t boltwrt-defaults 'Aliyun migration could not save configuration; migration will retry'
+	exit 1
+}
+trap 'rm -rf "$boltwrt_aliyun_savedir"' 0
+trap 'exit 1' 1 2 15
+while IFS='=' read -r section converted; do
+	[ -n "$section" ] || continue
+	if ! uci -q -t "$boltwrt_aliyun_savedir" set "ddns.${section}.domain=${converted}"; then
+		logger -t boltwrt-defaults 'Aliyun migration could not save configuration; migration will retry'
+		exit 1
+	fi
+done <<EOF_UCI
+$boltwrt_aliyun_updates
 EOF_UCI
-[ "$?" = 0 ] && uci -q commit ddns && exit 0
+uci -q -t "$boltwrt_aliyun_savedir" commit ddns && exit 0
 logger -t boltwrt-defaults 'Aliyun migration could not save configuration; migration will retry'
 exit 1
