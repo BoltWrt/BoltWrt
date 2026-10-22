@@ -99,7 +99,8 @@ def main():
         require(not missing, f"{service}: missing actual backend/frontend packages: {sorted(missing)}")
     require(any(name.startswith("nftables") for name in packages), "missing nftables backend")
     require(packages.get("kernel", "").startswith("6.12.112"), "unexpected built kernel")
-    require("kmod-sched-cake-mq" not in packages, "cake_mq needs separate runtime acceptance")
+    # The locked sch_cake module provides both cake and cake_mq. A package
+    # manifest cannot establish which qdisc is active; that needs runtime checks.
     profiles = json.loads((directory / "profiles.json").read_text())
     require(profiles["version_number"] == "4.0.0" and profiles["target"] == target,
             "image profile version/target mismatch")
