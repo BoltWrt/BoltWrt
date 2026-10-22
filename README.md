@@ -1,80 +1,108 @@
-# BoltWrt
+![OpenWrt logo](include/logo.png)
 
----
-     __________       .__   __   __      __          __
-     \______   \ ____ |  |_/  |_/  \    /  \________/  |_
-      |    |  _//  _ \|  |\   __\   \/\/   /\_  __ \   __\
-      |    |   (  <_> )  |_|  |  \        /  |  | \/|  |
-      |______  /\____/|____/__|   \__/\  /   |__|   |__|
-             \/                        \/
----
+OpenWrt Project is a Linux operating system targeting embedded devices. Instead
+of trying to create a single, static firmware, OpenWrt provides a fully
+writable filesystem with package management. This frees you from the
+application selection and configuration provided by the vendor and allows you
+to customize the device through the use of packages to suit any application.
+For developers, OpenWrt is the framework to build an application without having
+to build a complete firmware around it; for users this means the ability for
+full customization, to use the device in ways never envisioned.
 
-## 简介
+Sunshine!
 
-BoltWrt 是基于 OpenWrt 的路由器系统，面向中文网络环境常见场景进行适配与增强。项目在保持 OpenWrt 配置兼容性的基础上，提供更易用的默认配置、更完整的状态监控、更友好的管理界面以及面向实际网络环境的功能集成。
+## Download
 
-BoltWrt 的目标是提供一个高效、稳定、安全、易用且可持续维护的路由器系统。
+Built firmware images are available for many architectures and come with a
+package selection to be used as WiFi home router. To quickly find a factory
+image usable to migrate from a vendor stock firmware to OpenWrt, try the
+*Firmware Selector*.
 
-## 特性
+* [OpenWrt Firmware Selector](https://firmware-selector.openwrt.org/)
 
-- 基于 OpenWrt 24.10，兼容 OpenWrt 生态与配置方式
-- 提供简洁友好的 Web 管理界面
-- 针对中文网络环境适配与增强
-- 适用于硬件路由器、虚拟机及边缘设备
+If your device is supported, please follow the **Info** link to see install
+instructions or consult the support resources listed below.
 
-## 主要组件
+## 
 
-BoltWrt 默认集成了一组面向实际网络环境的常用组件，用于增强 DNS、动态解析、代理、流量控制、远程访问与内网穿透能力。
+An advanced user may require additional or specific package. (Toolchain, SDK, ...) For everything else than simple firmware download, try the wiki download page:
 
-| 组件 | 说明 |
-| --- | --- |
-| `smartdns` | 高性能 DNS 解析器，支持多上游并发查询、缓存优化与 DNS 加速策略 |
-| `ddns` | 动态域名解析模块，支持多服务商的域名记录自动更新 |
-| `passwall2` | 代理与策略路由框架，支持多种代理协议、分流策略与透明代理场景 |
-| `sqm` | 智能队列管理模块，用于流量整形、缓解网络拥塞并降低延迟抖动 |
-| `upnp` | 通用即插即用端口转发服务，支持局域网设备自动创建端口映射 |
-| `openvpn` | OpenVPN 客户端与服务端支持，适用于跨平台 VPN 连接场景 |
-| `ocserv` | Cisco AnyConnect 兼容 VPN 服务端，支持 TLS/DTLS 加密连接 |
-| `frpc` | Frp 客户端模块，用于内网穿透、反向代理与远程访问场景 |
+* [OpenWrt Wiki Download](https://openwrt.org/downloads)
 
-> 具体组件可能会随版本演进进行调整，请以当前发布版本的构建配置为准。
+## Development
 
-## 推荐配置
+To build your own firmware you need a GNU/Linux, BSD or macOS system (case
+sensitive filesystem required). Cygwin is unsupported because of the lack of a
+case sensitive file system.
 
-| 项目 | 推荐要求 |
-| --- | --- |
-| CPU | 支持 64 位指令集 |
-| RAM | 不低于 256 MB |
-| 存储 | 不低于 256 MB |
-| 网络接口 | 至少 1 个以太网接口 |
+### Requirements
 
-> 实际配置需求取决于设备角色、网络规模、启用功能及流量负载。开启更多服务或承担更高转发压力时，建议使用更高规格的硬件。
+You need the following tools to compile OpenWrt, the package names vary between
+distributions. A complete list with distribution specific packages is found in
+the [Build System Setup](https://openwrt.org/docs/guide-developer/build-system/install-buildsystem)
+documentation.
 
-## 部署方式
+```
+binutils bzip2 diff find flex gawk gcc-6+ getopt grep install libc-dev libz-dev
+make4.1+ perl python3.7+ rsync subversion unzip which
+```
 
-### 虚拟化部署
+### Quickstart
 
-以 VMware 等虚拟化平台为例：
+1. Run `./scripts/feeds update -a` to obtain all the latest package definitions
+   defined in feeds.conf / feeds.conf.default
 
-1. 创建虚拟机，并选择对应格式的磁盘镜像，例如 VMDK。
-2. 为虚拟机分配合适的 CPU、内存、磁盘与网卡数量。
-3. 启动系统后，如有需要，根据虚拟网卡顺序调整 `/etc/config/network`，确保 WAN、LAN 等接口绑定正确。
-4. 通过浏览器访问默认管理地址：`http://10.126.0.1`。
-5. 根据实际网络拓扑完成后续配置。
+2. Run `./scripts/feeds install -a` to install symlinks for all obtained
+   packages into package/feeds/
 
-## 默认访问
+3. Run `make menuconfig` to select your preferred configuration for the
+   toolchain, target system & firmware packages.
 
-- 默认管理地址：`http://10.126.0.1`
-- 默认账号：root
+4. Run `make` to build your firmware. This will download all sources, build the
+   cross-compile toolchain and then cross-compile the GNU/Linux kernel & all chosen
+   applications for your target system.
 
-## 致谢
+### Related Repositories
 
-BoltWrt 基于 OpenWrt 及其社区生态构建，并使用或参考了多个优秀开源项目，在此表示感谢：
+The main repository uses multiple sub-repositories to manage packages of
+different categories. All packages are installed via the OpenWrt package
+manager called `opkg`. If you're looking to develop the web interface or port
+packages to OpenWrt, please find the fitting repository below.
 
-- [OpenWrt](https://github.com/openwrt/openwrt)
-- [luci-theme-argon](https://github.com/jerrykuku/luci-theme-argon)
-- [清华大学开源软件镜像站](https://mirrors.tuna.tsinghua.edu.cn)
+* [LuCI Web Interface](https://github.com/openwrt/luci): Modern and modular
+  interface to control the device via a web browser.
 
-## 许可证
+* [OpenWrt Packages](https://github.com/openwrt/packages): Community repository
+  of ported packages.
 
-本项目遵循 [GPL](LICENSE) 许可证发布。
+* [OpenWrt Routing](https://github.com/openwrt/routing): Packages specifically
+  focused on (mesh) routing.
+
+* [OpenWrt Video](https://github.com/openwrt/video): Packages specifically
+  focused on display servers and clients (Xorg and Wayland).
+
+## Support Information
+
+For a list of supported devices see the [OpenWrt Hardware Database](https://openwrt.org/supported_devices)
+
+### Documentation
+
+* [Quick Start Guide](https://openwrt.org/docs/guide-quick-start/start)
+* [User Guide](https://openwrt.org/docs/guide-user/start)
+* [Developer Documentation](https://openwrt.org/docs/guide-developer/start)
+* [Technical Reference](https://openwrt.org/docs/techref/start)
+
+### Support Community
+
+* [Forum](https://forum.openwrt.org): For usage, projects, discussions and hardware advise.
+* [Support Chat](https://webchat.oftc.net/#openwrt): Channel `#openwrt` on **oftc.net**.
+
+### Developer Community
+
+* [Bug Reports](https://bugs.openwrt.org): Report bugs in OpenWrt
+* [Dev Mailing List](https://lists.openwrt.org/mailman/listinfo/openwrt-devel): Send patches
+* [Dev Chat](https://webchat.oftc.net/#openwrt-devel): Channel `#openwrt-devel` on **oftc.net**.
+
+## License
+
+OpenWrt is licensed under GPL-2.0
