@@ -352,6 +352,8 @@ define Download
     endif
   )
 
+  $(call check_download_integrity)
+
   $(foreach dep,$(DOWNLOAD_RDEP),
     $(dep): $(DL_DIR)/$(FILE)
   )
