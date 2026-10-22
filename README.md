@@ -18,6 +18,19 @@ python3 scripts/boltwrt-verify.py x86-64
 
 源码归档优先使用 OpenWrt 官方缓存；缓存未命中时，下载器继续使用各 recipe 的源地址。全部归档仍须符合固定校验值。
 
+顶层 `make download` 不覆盖所有 host 构建依赖；实际编译仍可能补取固定 recipe 的输入，不能据该命令返回 0 推定离线构建已具备全部源码。
+
+在 ARM64 Linux 构建宿主上，上游 Go 1.4 自举起点不可用。可使用宿主已有、满足 [Go 1.26.9 自举要求](https://github.com/golang/go/blob/go1.26.9/src/make.bash)的 Go（至少 1.24.6），在每次编译命令中同时取消内部 bootstrap 并指定其根目录。本次隔离构建已用固定镜像内 Go 1.26.8 自举出实际 Go 1.26.9；产品共享配置和锁定 feed 不需要修改：
+
+```sh
+go_root="$(GOTOOLCHAIN=local go env GOROOT)" || exit 1
+GOTOOLCHAIN=local "$go_root/bin/go" version
+GOTOOLCHAIN=local make -j4 V=s CONFIG_GOLANG_BUILD_BOOTSTRAP= \
+  CONFIG_GOLANG_EXTERNAL_BOOTSTRAP_ROOT="$go_root"
+```
+
+保存外部 bootstrap 版本、构建环境身份及有效命令参数；这些覆盖不包含在 `.config` SHA 中。Ubuntu amd64 CI 保持上游原生自举链。
+
 RAX3000M/Me 使用独立干净构建目录，把目标参数换为 `cmcc-rax3000m`。准备脚本按 `config/source-lock.json` 抓取完整 SHA，验证子模块与已知补丁；不依赖旧版 Go/Python 覆盖或已有下载缓存。重复执行接受已知幂等补丁，遇到源版本、补丁锚点、未知修改或额外包提供者漂移时失败并保留原文件。`defconfig` 后逐项核对产品选择，阻止静默丢失组件或仅有 LuCI 页面而无后端。
 
 自定义 feed 改动目前仅在本地提交。未经允许不推送；在这些提交可从远端取得之前，本地干净构建需显式使用含锁定 commit 的 Packages 仓库：
