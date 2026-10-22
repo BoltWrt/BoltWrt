@@ -1,6 +1,7 @@
 """Failure-boundary checks; no network or firmware build is used here."""
 import importlib.util
 import json
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -94,6 +95,27 @@ class PrepareTests(unittest.TestCase):
             prepare.exact_patch("different upstream", [("old", "new")], "fixture")
         with self.assertRaises(prepare.PrepareError):
             prepare.exact_patch("old old", [("old", "new")], "fixture")
+
+    def test_compatibility_manifest_is_bound_to_committed_gitlink(self):
+        repo = self.repo()
+        manifest_path = repo / "compat.json"
+        child = "net/openwrt-smartdns"
+        sha = "1" * 40
+        manifest = {"submodules": {child: {"commit": sha, "files": {
+            "Makefile": [["VERSION:=fixed", "SOURCE_VERSION:=fixed"]]}}}}
+        manifest_path.write_text(json.dumps(manifest))
+        self.git(repo, "add", "compat.json")
+        self.git(repo, "commit", "-qm", "compatibility fixture")
+        spec = {"patch_manifest": "compat.json"}
+        expected = prepare.submodule_patches(repo, spec, {child: sha})
+        self.assertEqual(len(expected[child]["Makefile"]), 2)  # Existing Rust edit plus source pin.
+        self.assertEqual(expected, prepare.submodule_patches(repo, spec, {child: sha}))
+        manifest_path.write_text("not committed data")
+        self.assertEqual(expected, prepare.submodule_patches(repo, spec, {child: sha}))
+        with self.assertRaisesRegex(prepare.PrepareError, "locked gitlink"):
+            prepare.submodule_patches(repo, spec, {child: "2" * 40})
+        with self.assertRaises(prepare.PrepareError):
+            prepare.submodule_patches(repo, {"patch_manifest": "../outside"}, {child: sha})
 
     def test_source_names_differ_but_binary_provider_conflict_is_detected(self):
         custom = "feeds/BoltWrt/net/openwrt-smartdns"
