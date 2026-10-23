@@ -55,7 +55,8 @@ def budget():
 def run(*command, cwd=None):
     print('+ ' + ' '.join(map(str, command)), file=log)
     process = subprocess.Popen(list(map(str, command)), cwd=cwd, env=env,
-                               stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+                               stdin=subprocess.DEVNULL, stdout=log,
+                               stderr=subprocess.STDOUT, start_new_session=True)
     try:
         while process.poll() is None:
             budget()
@@ -97,7 +98,19 @@ assert symbols.get('ASH') and symbols.get('SHELL_ASH')
 seed = base / 'ash.config'
 seed.write_text(''.join(f'CONFIG_{key}=y\n' if value else f'# CONFIG_{key} is not set\n'
                         for key, value in symbols.items()))
-run('make', '-j1', 'allnoconfig', 'KCONFIG_ALLCONFIG=' + str(seed), cwd=busybox)
+run('make', '-j1', 'allnoconfig', cwd=busybox)
+# BusyBox 1.37 conf.c intentionally resets boolean symbols during allnoconfig,
+# even those in KCONFIG_ALLCONFIG. Apply the explicit shell options afterwards
+# to the complete all-no baseline, then let oldconfig resolve dependencies.
+config_path = busybox / '.config'
+baseline = config_path.read_text()
+for key, value in symbols.items():
+    pattern = r'^(?:CONFIG_' + re.escape(key) + r'=.*|# CONFIG_' + re.escape(key) + r' is not set)$'
+    replacement = f'CONFIG_{key}=y' if value else f'# CONFIG_{key} is not set'
+    baseline, count = re.subn(pattern, lambda _: replacement, baseline, flags=re.M)
+    assert count == 1, f'expected one BusyBox config entry: {key}'
+config_path.write_text(baseline)
+run('make', '-j1', 'oldconfig', cwd=busybox)
 config = (busybox / '.config').read_text()
 for key, value in symbols.items():
     assert (f'CONFIG_{key}=y' in config.splitlines()) == value, f'ash option changed: {key}'
