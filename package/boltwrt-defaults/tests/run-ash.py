@@ -133,9 +133,10 @@ for directory in ('/etc/config', '/tmp/.uci', '/var/state', '/lib/functions', '/
     Path(directory).mkdir(parents=True, exist_ok=True)
 for src, dest in ((uci_build / 'uci', '/usr/bin/uci'),
                   (host / 'bin/jshn', '/usr/bin/jshn'),
-                  (work / 'package/libs/libubox/sh/jshn.sh', '/usr/share/libubox/jshn.sh'),
+                  (host / 'share/libubox/jshn.sh', '/usr/share/libubox/jshn.sh'),
                   (work / 'package/base-files/files/lib/functions.sh', '/lib/functions.sh'),
                   (work / 'package/system/uci/files/lib/config/uci.sh', '/lib/config/uci.sh')):
+    assert src.is_file(), f'missing native fixture source: {src}'
     assert not Path(dest).exists(), f'unexpected installed fixture file: {dest}'
     Path(dest).symlink_to(src)
 for name in ('uci-defaults.sh', 'ipv4.sh'):
@@ -151,7 +152,8 @@ identity = {'busybox_version': '1.37.0', 'ash_sha256': hashlib.sha256((busybox /
             'scope': 'native interpreter semantics only; no target binary or router boot'}
 identity['native_reused_sha256'] = {
     str(path): hashlib.sha256(path.read_bytes()).hexdigest()
-    for path in (host / 'bin/jshn', host / 'lib/libubox.so', host / 'lib/libblobmsg_json.so',
+    for path in (host / 'bin/jshn', host / 'share/libubox/jshn.sh',
+                 host / 'lib/libubox.so', host / 'lib/libblobmsg_json.so',
                  work / 'package/libs/libubox/Makefile')}
 identity['space_measurement'] = 'du allocated bytes, sampled; instantaneous peak may be missed; tmpfs hard cap 200MiB'
 identity['final_allocated_bytes'] = 0
