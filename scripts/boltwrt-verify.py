@@ -8,6 +8,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import zlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -74,11 +75,107 @@ def check_disk(path, efi, compressed=True):
     return {"partition_sectors": partitions, "squashfs_bytes": used}
 
 
+def check_rax_gpt(path):
+    """Read ptgen's primary-only GPT artifact, not a full eMMC disk dump."""
+    require(1024 <= path.stat().st_size <= 1024 * 1024, "invalid eMMC GPT artifact size")
+    data = path.read_bytes()
+    require(data[510:512] == b"\x55\xaa" and data[512:520] == b"EFI PART",
+            "missing eMMC protective MBR/GPT signatures")
+    revision, header_size, expected_crc, reserved = struct.unpack_from("<IIII", data, 520)
+    require(revision == 0x10000 and 92 <= header_size <= 512 and reserved == 0,
+            "invalid eMMC GPT primary header")
+    header = bytearray(data[512:512 + header_size])
+    header[16:20] = bytes(4)
+    require(zlib.crc32(header) == expected_crc, "eMMC GPT header CRC mismatch")
+    current, backup, first_usable, last_usable = struct.unpack_from("<QQQQ", data, 536)
+    entry_lba, count, size, table_crc = struct.unpack_from("<QIII", data, 584)
+    require(current == 1 and entry_lba >= 2 and 1 <= count <= 4096 and
+            128 <= size <= 4096 and size % 128 == 0 and count * size <= 1024 * 1024,
+            "invalid eMMC GPT table geometry")
+    table_end = entry_lba * 512 + count * size
+    table_sectors = (count * size + 511) // 512
+    require(table_end <= len(data) and (table_end + 511) // 512 <= first_usable <= last_usable
+            and last_usable + table_sectors < backup, "invalid eMMC GPT usable range/table bounds")
+    table = data[entry_lba * 512:table_end]
+    require(zlib.crc32(table) == table_crc, "eMMC GPT partition table CRC mismatch")
+    partitions, ranges, guids = {}, [], set()
+    for offset in range(0, len(table), size):
+        entry = table[offset:offset + size]
+        if entry[:16] == bytes(16):
+            continue
+        guid = entry[16:32]
+        require(guid != bytes(16) and guid not in guids, "invalid/duplicate eMMC GPT partition GUID")
+        guids.add(guid)
+        first, last = struct.unpack_from("<QQ", entry, 32)
+        require(first_usable <= first <= last <= last_usable, "eMMC GPT partition outside usable range")
+        require(all(last < start or first > end for start, end in ranges), "overlapping eMMC GPT partitions")
+        ranges.append((first, last))
+        name = entry[56:128].decode("utf-16le").rstrip("\0")
+        if name:
+            require(name not in partitions, f"duplicate eMMC GPT partition name: {name}")
+            partitions[name] = {"first_lba": first, "last_lba": last, "bytes": (last - first + 1) * 512}
+    require({"recovery", "production"} <= partitions.keys(), "eMMC GPT missing recovery/production")
+    return partitions
+
+
+def fit_file_span(path):
+    """Bound produced FITs by both their header and complete padded file."""
+    file_bytes = path.stat().st_size
+    with path.open("rb") as handle:
+        header = handle.read(40)
+    require(len(header) == 40, f"{path.name}: truncated FIT header")
+    magic, total, structure, strings, reserve, version, compatible, _, strings_size, structure_size = struct.unpack(">10I", header)
+    require(magic == 0xd00dfeed and 40 <= total <= file_bytes, f"{path.name}: invalid/truncated FIT size")
+    require(version >= 17 and compatible <= 17 and 40 <= reserve < total and
+            40 <= structure <= total and structure + structure_size <= total and
+            40 <= strings <= total and strings + strings_size <= total,
+            f"{path.name}: invalid FIT header ranges")
+    # Complete file span conservatively includes external data, metadata and
+    # padding, even when U-Boot's imszb reports fewer sectors. This is a budget
+    # check, not a full FDT property/hash validator.
+    return {"file_bytes": file_bytes, "fit_header_bytes": total,
+            "file_sector_bytes": ((file_bytes + 511) // 512) * 512}
+
+
+def check_rax_fit_budget(directory):
+    prefix = "boltwrt-4.0.0-mediatek-filogic-cmcc_rax3000m-"
+    partitions = check_rax_gpt(directory / (prefix + "emmc-gpt.bin"))
+    production = fit_file_span(directory / (prefix + "squashfs-sysupgrade.itb"))
+    recovery = fit_file_span(directory / (prefix + "initramfs-recovery.itb"))
+    mib = 1024 * 1024
+    # Locked DTS: 114MiB raw UBI. Normal U-Boot init creates two 1MiB env
+    # volumes, and retains fit + recovery together when removing rootfs_data.
+    env_bytes, raw_bytes, conservative_bytes = 2 * mib, 114 * mib, 104 * mib
+    combined = production["file_bytes"] + recovery["file_bytes"] + env_bytes
+    errors = []
+    for name, span in (("production", production), ("recovery", recovery)):
+        if span["file_sector_bytes"] > partitions[name]["bytes"]:
+            errors.append(f"eMMC {name} FIT/file span {span['file_sector_bytes']} exceeds GPT capacity {partitions[name]['bytes']}")
+    if production["file_bytes"] >= conservative_bytes:
+        errors.append("RAX production exceeds conservative 104 MiB NAND budget")
+    if combined > raw_bytes:
+        errors.append(f"NAND production+recovery+two 1MiB env lower bound {combined} exceeds raw 114 MiB UBI {raw_bytes}")
+    if combined >= conservative_bytes:
+        errors.append(f"NAND coexistence lower bound {combined} exceeds conservative 104 MiB budget; UBI/bad-block capacity remains untested")
+    require(not errors, "; ".join(errors))
+    return {"emmc_partitions": partitions, "production": production, "recovery": recovery,
+            "nand_payload_lower_bound_bytes": combined, "nand_environment_bytes": env_bytes,
+            "nand_raw_ubi_bytes": raw_bytes, "nand_conservative_bytes": conservative_bytes,
+            "scope": "Static conservative budget only; UBI rounding/reserves/bad blocks and device writes untested"}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("target", choices=("x86-64", "cmcc-rax3000m"))
     parser.add_argument("--directory", type=Path)
+    parser.add_argument("--rax-budget-only", action="store_true",
+                        help="check only RAX GPT/FIT budgets; no config/manifest/profile checks")
     args = parser.parse_args()
+    if args.rax_budget_only:
+        require(args.target == "cmcc-rax3000m", "--rax-budget-only requires cmcc-rax3000m")
+        directory = args.directory or ROOT / "bin/targets/mediatek/filogic"
+        print(json.dumps(check_rax_fit_budget(directory), indent=2))
+        return
     subprocess.run([sys.executable, str(ROOT / "scripts/boltwrt-config.py"), args.target,
                     "--check-only"], check=True)
     target = "x86/64" if args.target == "x86-64" else "mediatek/filogic"
@@ -149,18 +246,13 @@ def main():
         prefix = "boltwrt-4.0.0-mediatek-filogic-cmcc_rax3000m-"
         image = directory / (prefix + "squashfs-sysupgrade.itb")
         require(image.is_file(), "missing RAX sysupgrade FIT")
-        require(0 < image.stat().st_size < 104 * 1024 * 1024,
-                "RAX image exceeds conservative 104 MiB NAND budget; not safe for common profile")
-        with image.open("rb") as handle:
-            require(handle.read(4) == b"\xd0\x0d\xfe\xed", "RAX image is not a FIT")
+        record["rax_fit_budget"] = check_rax_fit_budget(directory)
         for medium in ("emmc", "nand"):
             for ddr in ("ddr3", "ddr4"):
                 for kind in ("preloader.bin", "bl31-uboot.fip"):
                     path = directory / f"{prefix}{medium}-{ddr}-{kind}"
                     require(path.is_file() and path.stat().st_size > 0, f"missing hardware artifact: {path.name}")
                     record["images"][path.name] = {"bytes": path.stat().st_size, "sha256": digest(path)}
-        require((directory / (prefix + "emmc-gpt.bin")).is_file(), "missing eMMC GPT artifact")
-        require(any(directory.glob(prefix + "*-recovery.itb")), "missing RAX initramfs recovery FIT")
     destination = ROOT / "logs/boltwrt" / f"{args.target}-images.json"
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(json.dumps(record, indent=2) + "\n")
