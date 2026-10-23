@@ -2,7 +2,9 @@
 """Offline native ash/UCI test in a new disposable container, never the builder.
 
 Required mounts: RAX /work read-only, this tests directory /review read-only,
-empty dedicated output directory /out read-write. Use the builder's immutable
+empty dedicated output directory /out read-write and executable (tmpfs defaults
+to noexec in Docker). Use --tmpfs /out:rw,exec,size=200m,nodev,nosuid,mode=700.
+Use the builder's immutable
 image ID, --pull=never --network=none --log-driver=none --cpuset-cpus=2,
 --user=0. No downloads, dependency installation or writes to /work.
 """
@@ -23,7 +25,8 @@ assert os.environ.get('BOLTWRT_ASH_TASK') == 'isolated', 'not an active builder'
 mounts = [line.split() for line in Path('/proc/mounts').read_text().splitlines()]
 assert any(m[1] == '/work' and 'ro' in m[3].split(',') for m in mounts)
 assert any(m[1] == '/out' and m[2] == 'tmpfs' and
-           {'nodev', 'nosuid'}.issubset(m[3].split(',')) for m in mounts)
+           {'nodev', 'nosuid'}.issubset(m[3].split(',')) and
+           'noexec' not in m[3].split(',') for m in mounts)
 base = Path('/out')
 assert os.statvfs(base).f_blocks * os.statvfs(base).f_frsize == 200 * 1024 ** 2
 assert not list(base.iterdir()), '/out must be empty and dedicated to this task'
