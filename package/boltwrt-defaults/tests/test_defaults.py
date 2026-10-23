@@ -3,6 +3,7 @@
 No router, provider API or production credentials are used.
 """
 import json
+import hashlib
 import os
 from pathlib import Path
 import subprocess
@@ -15,6 +16,12 @@ if not Path("/.dockerenv").is_file():
 
 ROOT = Path('/work')
 FILES = ROOT / 'package/boltwrt-defaults/files/etc'
+SHELL = os.environ.get('BOLTWRT_TEST_SHELL', '/bin/bash')
+if not Path(SHELL).is_absolute() or not os.access(SHELL, os.X_OK):
+    raise SystemExit('BOLTWRT_TEST_SHELL must name an executable absolute path')
+print(json.dumps({'test_shell': SHELL, 'sha256': hashlib.sha256(Path(SHELL).read_bytes()).hexdigest(),
+                  'identity': subprocess.run([SHELL, '-c', 'echo "${BASH_VERSION:-ash-or-other}"'],
+                                             check=True, text=True, capture_output=True).stdout.strip()}), flush=True)
 
 
 def run(*args, check=True, env=None):
@@ -39,15 +46,15 @@ class DefaultsTest(unittest.TestCase):
                                     'system': {}}))
         env = dict(os.environ, CFG=str(path))
         script = str(FILES / 'board.d/99-boltwrt')
-        run('bash', script, env=env)
+        run(SHELL, script, env=env)
         first = json.loads(path.read_text())
-        run('bash', script, env=env)
+        run(SHELL, script, env=env)
         self.assertEqual(first, json.loads(path.read_text()))
         Path('/etc/board.json').write_text(path.read_text())
         return first
 
     def generate(self):
-        run('bash', str(ROOT / 'package/base-files/files/bin/config_generate'))
+        run(SHELL, str(ROOT / 'package/base-files/files/bin/config_generate'))
 
     def test_fresh_install_and_repeated_generation(self):
         board = self.board()
@@ -79,7 +86,7 @@ class DefaultsTest(unittest.TestCase):
                     " option username 'fixture-access-key'\n option password 'fixture-secret'\n option enabled '1'\n")
 
     def migrate(self, check=True, env=None):
-        return run('bash', str(FILES / 'uci-defaults/95-boltwrt-aliyun'), check=check, env=env)
+        return run(SHELL, str(FILES / 'uci-defaults/95-boltwrt-aliyun'), check=check, env=env)
 
     def test_second_set_failure_is_isolated_from_boot_commit(self):
         self.service('first', 'home.example.com')
@@ -94,7 +101,7 @@ class DefaultsTest(unittest.TestCase):
             # Delegate every operation to native UCI. Fail the second set via a
             # genuine missing-section lookup after the first delta was saved.
             wrapper = directory / 'uci'
-            wrapper.write_text('''#!/bin/bash
+            wrapper.write_text('#!' + SHELL + '\n' + '''
 for arg in "$@"; do
     if [ "$arg" = set ]; then
         if [ -f "$TEST_UCI_DIR/first-staged" ]; then
