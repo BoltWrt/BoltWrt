@@ -13,26 +13,37 @@ from pathlib import Path
 import re
 import signal
 import subprocess
+import sys
 import time
 
+if sys.flags.optimize:
+    raise SystemExit('Python optimization must be disabled: safety checks use assert')
 assert Path('/.dockerenv').is_file() and os.getuid() == 0
 assert os.environ.get('BOLTWRT_ASH_TASK') == 'isolated', 'not an active builder'
 mounts = [line.split() for line in Path('/proc/mounts').read_text().splitlines()]
 assert any(m[1] == '/work' and 'ro' in m[3].split(',') for m in mounts)
+assert any(m[1] == '/out' and m[2] == 'tmpfs' and
+           {'nodev', 'nosuid'}.issubset(m[3].split(',')) for m in mounts)
 base = Path('/out')
+assert os.statvfs(base).f_blocks * os.statvfs(base).f_frsize == 200 * 1024 ** 2
 assert not list(base.iterdir()), '/out must be empty and dedicated to this task'
 work = Path('/work')
 host = work / 'staging_dir/host'
 env = dict(os.environ, PATH=str(host / 'bin') + ':/usr/bin:/bin', LC_ALL='C',
            MAKEFLAGS='', CFLAGS='', CPPFLAGS='', LDFLAGS='')
 env.pop('CROSS_COMPILE', None)
+env.pop('PYTHONOPTIMIZE', None)
 log = (base / 'runner.log').open('w', buffering=1)
+peak_sampled_bytes = 0
 
 
 def budget():
+    global peak_sampled_bytes
     size = int(subprocess.check_output(['du', '-sk', str(base)]).split()[0]) * 1024
-    free = os.statvfs(base).f_bavail * os.statvfs(base).f_frsize
-    # Leave 25MiB headroom for writes between the one-second checks.
+    peak_sampled_bytes = max(peak_sampled_bytes, size)
+    free = os.statvfs(work).f_bavail * os.statvfs(work).f_frsize
+    # Sampling is an early stop, not a guarantee of observing instantaneous
+    # peak use. The independent /out tmpfs enforces the hard 200MiB ceiling.
     assert size < 175 * 1024 ** 2, f'private directory reached 175MiB guard: {size}'
     assert free >= 1024 ** 3, f'shared free space below 1GiB: {free}'
     return size
@@ -120,11 +131,17 @@ identity = {'busybox_version': '1.37.0', 'ash_sha256': hashlib.sha256((busybox /
             'shell_config': symbols, 'patch_sha256': patch_hashes,
             'target_config_sha256': hashlib.sha256((work / '.config').read_bytes()).hexdigest(),
             'harness_sha256': hashlib.sha256(Path('/review/test_defaults.py').read_bytes()).hexdigest(),
-            'private_bytes': budget(), 'tests': 'seven native UCI/JSHN tests via native ash; see runner.log',
+            'tests': 'seven native UCI/JSHN tests via native ash; see runner.log',
             'scope': 'native interpreter semantics only; no target binary or router boot'}
 identity['native_reused_sha256'] = {
     str(path): hashlib.sha256(path.read_bytes()).hexdigest()
     for path in (host / 'bin/jshn', host / 'lib/libubox.so', host / 'lib/libblobmsg_json.so',
                  work / 'package/libs/libubox/Makefile')}
+identity['space_measurement'] = 'du allocated bytes, sampled; instantaneous peak may be missed; tmpfs hard cap 200MiB'
+identity['final_allocated_bytes'] = 0
+for _ in range(3):
+    identity['peak_sampled_allocated_bytes'] = peak_sampled_bytes
+    (base / 'identity.json').write_text(json.dumps(identity, indent=2) + '\n')
+    identity['final_allocated_bytes'] = budget()
 (base / 'identity.json').write_text(json.dumps(identity, indent=2) + '\n')
 print(json.dumps(identity), flush=True)

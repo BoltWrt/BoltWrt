@@ -7,9 +7,12 @@ import hashlib
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 
+if sys.flags.optimize:
+    raise SystemExit('Python optimization must be disabled for defaults tests')
 if not Path("/.dockerenv").is_file():
     raise SystemExit("Run only inside a disposable Docker container")
 
