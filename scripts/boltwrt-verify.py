@@ -14,18 +14,25 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SERVICE_PACKAGES = {
     "DNS": ("dnsmasq-full", "smartdns", "luci-app-smartdns"),
-    "DDNS": ("ddns-scripts", "ddns-scripts-aliyun", "luci-app-ddns"),
-    "proxy": ("luci-app-passwall2", "sing-box"),
+    "DDNS": ("ddns-scripts", "ddns-scripts-aliyun", "ddns-scripts-services", "luci-app-ddns"),
+    "proxy": ("luci-app-passwall2", "haproxy", "sing-box", "xray-core", "geoview", "v2ray-plugin",
+              "v2ray-geoip", "v2ray-geosite", "shadowsocks-rust-sslocal",
+              "shadowsocks-libev-ss-local", "shadowsocks-libev-ss-redir",
+              "shadowsocksr-libev-ssr-local", "shadowsocksr-libev-ssr-redir", "simple-obfs-client"),
     "SQM": ("sqm-scripts", "luci-app-sqm", "kmod-sched-cake", "kmod-ifb"),
     "UPnP": ("miniupnpd-nftables", "luci-app-upnp"),
     "OpenVPN": ("openvpn-openssl", "luci-app-openvpn"),
     "ocserv": ("ocserv", "luci-app-ocserv"),
     "frpc": ("frpc", "luci-app-frpc"),
     "WireGuard": ("wireguard-tools", "kmod-wireguard", "luci-proto-wireguard"),
-    "network": ("firewall4", "ppp", "ppp-mod-pppoe", "odhcp6c", "odhcpd-ipv6only"),
-    "web": ("luci-nginx", "nginx-ssl", "nginx-mod-luci", "luci-theme-argon"),
+    "network": ("firewall4", "nftables-json", "ucode", "ucode-mod-fs", "ucode-mod-ubus",
+                "ucode-mod-uci", "ppp", "ppp-mod-pppoe", "odhcp6c", "odhcpd-ipv6only"),
+    "web": ("luci-nginx", "nginx-ssl", "nginx-mod-luci", "nginx-mod-ubus", "nginx-ssl-util",
+            "uwsgi", "uwsgi-cgi-plugin", "uwsgi-luci-support", "uwsgi-syslog-plugin", "luci-theme-argon"),
     "defaults": ("boltwrt-defaults",),
 }
+X86_SERVICE_PACKAGES = ("zabbix-agentd-basic", "ddns-scripts-cloudflare",
+                        "ddns-scripts-godaddy", "ddns-scripts-huaweicloud")
 
 
 def require(condition, message):
@@ -38,22 +45,71 @@ def digest(path):
         return hashlib.file_digest(handle, "sha256").hexdigest()
 
 
+def check_manifest(packages, target):
+    require("opkg" not in packages and any(p in packages for p in ("apk-mbedtls", "apk-openssl")),
+            "manifest does not contain an APK-only package manager")
+    require("uhttpd" not in packages, "unexpected second web server in image")
+    for service, names in SERVICE_PACKAGES.items():
+        missing = set(names) - packages.keys()
+        require(not missing, f"{service}: missing actual backend/frontend packages: {sorted(missing)}")
+    if target == "x86-64":
+        missing = set(X86_SERVICE_PACKAGES) - packages.keys()
+        require(not missing, f"x86 services/providers missing: {sorted(missing)}")
+    require(packages.get("kernel", "").startswith("6.12.112"), "unexpected built kernel")
+
+
+def check_disk_gpt(image, header):
+    """Validate the primary GPT in a full ptgen disk, including its BIOS boot entry."""
+    require(header[512:520] == b"EFI PART", "missing GPT")
+    require(any(header[p + 4] == 0xee for p in (446, 462, 478, 494)), "missing protective MBR")
+    revision, size, crc, reserved = struct.unpack_from("<IIII", header, 520)
+    require(revision == 0x10000 and 92 <= size <= 512 and reserved == 0, "invalid GPT primary header")
+    primary = bytearray(header[512:512 + size])
+    primary[16:20] = bytes(4)
+    require(zlib.crc32(primary) == crc, "GPT header CRC mismatch")
+    current, backup, first_usable, last_usable = struct.unpack_from("<QQQQ", header, 536)
+    entry_lba, count, entry_size, table_crc = struct.unpack_from("<QIII", header, 584)
+    table_bytes = count * entry_size
+    table_end = entry_lba * 512 + table_bytes
+    table_sectors = (table_bytes + 511) // 512
+    require(current == 1 and header[568:584] != bytes(16) and entry_lba >= 2 and
+            2 <= count <= 4096 and 128 <= entry_size <= 4096 and entry_size % 128 == 0 and
+            table_bytes <= 1024 * 1024 and table_end <= 1024 * 1024,
+            "invalid GPT entry geometry")
+    require((table_end + 511) // 512 <= first_usable <= last_usable and
+            last_usable + table_sectors < backup, "invalid GPT usable range/table bounds")
+    image.seek(entry_lba * 512)
+    table = image.read(table_bytes)
+    require(len(table) == table_bytes, "truncated GPT partition table")
+    require(zlib.crc32(table) == table_crc, "GPT partition table CRC mismatch")
+    partitions, guids, ranges = [], set(), []
+    for index in range(count):
+        entry = table[index * entry_size:(index + 1) * entry_size]
+        if entry[:16] == bytes(16):
+            require(index >= 2, "missing GPT boot/root partition entry")
+            continue
+        guid = entry[16:32]
+        require(guid != bytes(16) and guid not in guids, "invalid/duplicate GPT partition GUID")
+        guids.add(guid)
+        first, last = struct.unpack_from("<QQ", entry, 32)
+        require(first_usable <= first <= last <= last_usable, "GPT partition outside usable range")
+        require(all(last < start or first > end for start, end in ranges), "overlapping GPT partitions")
+        ranges.append((first, last))
+        if index < 2:
+            partitions.append((first, last - first + 1))
+    return partitions, (backup + 1) * 512
+
+
 def check_disk(path, efi, compressed=True):
     opener = gzip.open if compressed else open
     with opener(path, "rb") as image:
         header = image.read(1024)
+        require(len(header) == 1024, f"{path.name}: truncated disk header")
         require(header[510:512] == b"\x55\xaa", f"{path.name}: missing MBR signature")
         partitions = []
+        gpt_end = 0
         if efi:
-            require(header[512:520] == b"EFI PART", f"{path.name}: missing GPT")
-            entry_lba, count, size = struct.unpack_from("<QII", header, 512 + 72)
-            require(128 <= size <= 4096 and count >= 2, "invalid GPT entry geometry")
-            image.seek(entry_lba * 512)
-            entries = image.read(2 * size)
-            for offset in (0, size):
-                first, last = struct.unpack_from("<QQ", entries, offset + 32)
-                require(last >= first > 0, "invalid GPT partition bounds")
-                partitions.append((first, last - first + 1))
+            partitions, gpt_end = check_disk_gpt(image, header)
         else:
             require(header[446] == 0x80, f"{path.name}: BIOS partition is not bootable")
             for offset in (446, 462):
@@ -64,6 +120,7 @@ def check_disk(path, efi, compressed=True):
         require(partitions[1][0] >= sum(partitions[0]), "overlapping disk partitions")
         image.seek(partitions[1][0] * 512)
         squashfs = image.read(96)
+        require(len(squashfs) == 96, "truncated SquashFS header")
         require(squashfs[:4] == b"hsqs", f"{path.name}: root partition is not SquashFS")
         require(struct.unpack_from("<H", squashfs, 28)[0] == 4, "unexpected SquashFS version")
         used = struct.unpack_from("<Q", squashfs, 40)[0]
@@ -72,6 +129,7 @@ def check_disk(path, efi, compressed=True):
         while image.read(1024 * 1024):
             pass
         require(image.tell() >= sum(partitions[1]) * 512, "truncated disk image")
+        require(image.tell() >= gpt_end, "GPT backup geometry exceeds full disk image")
     return {"partition_sectors": partitions, "squashfs_bytes": used}
 
 
@@ -188,14 +246,7 @@ def main():
         require(bool(separator and name and version), f"invalid manifest line: {line}")
         require(name not in packages, f"duplicate manifest package: {name}")
         packages[name] = version
-    require("opkg" not in packages and any(p in packages for p in ("apk-mbedtls", "apk-openssl")),
-            "manifest does not contain an APK-only package manager")
-    require("uhttpd" not in packages, "unexpected second web server in image")
-    for service, names in SERVICE_PACKAGES.items():
-        missing = set(names) - packages.keys()
-        require(not missing, f"{service}: missing actual backend/frontend packages: {sorted(missing)}")
-    require(any(name.startswith("nftables") for name in packages), "missing nftables backend")
-    require(packages.get("kernel", "").startswith("6.12.112"), "unexpected built kernel")
+    check_manifest(packages, args.target)
     # The locked sch_cake module provides both cake and cake_mq. A package
     # manifest cannot establish which qdisc is active; that needs runtime checks.
     profiles = json.loads((directory / "profiles.json").read_text())
@@ -212,7 +263,6 @@ def main():
                     f"artifact content differs from profile: {path.name}")
             record["images"][path.name] = {"bytes": path.stat().st_size, "sha256": item["sha256"]}
     if args.target == "x86-64":
-        require("zabbix-agentd-basic" in packages, "x86 TLS monitoring package lost")
         for suffix, efi in (("generic-squashfs-combined.img.gz", False),
                             ("generic-squashfs-combined-efi.img.gz", True)):
             path = directory / ("boltwrt-4.0.0-x86-64-" + suffix)
