@@ -33,7 +33,7 @@ GOTOOLCHAIN=local make -j4 V=s CONFIG_GOLANG_BUILD_BOOTSTRAP= \
 
 RAX3000M/Me 使用独立干净构建目录，把目标参数换为 `cmcc-rax3000m`。准备脚本按 `config/source-lock.json` 抓取完整 SHA，验证子模块与已知补丁；不依赖旧版 Go/Python 覆盖或已有下载缓存。重复执行接受已知幂等补丁，遇到源版本、补丁锚点、未知修改或额外包提供者漂移时失败并保留原文件。`defconfig` 后逐项核对产品选择，阻止静默丢失组件或仅有 LuCI 页面而无后端。
 
-自定义 feed 改动目前仅在本地提交。未经允许不推送；在这些提交可从远端取得之前，本地干净构建需显式使用含锁定 commit 的 Packages 仓库：
+自定义 feed 的锁定提交 `af74fe86ff3b8729b48d1977a9032ab7946014e2` 已可从公开的 `BoltWrt/Packages` 仓库取得，干净环境可直接使用默认准备命令。若使用已有的本地源码镜像，可显式指定含该提交的 Packages 仓库：
 
 ```sh
 python3 scripts/boltwrt-prepare.py --local-feed /absolute/path/to/Packages
@@ -59,6 +59,8 @@ RAX 各变体需匹配实际存储、DDR 和设备布局，不能互换 bootload
 本次升级验收范围仅为 **3.1.2 → 4.0.0**。旧 opkg/APK 状态、旧包二进制、内核模块及整个 overlay 不应迁移；需要保留的 UCI、自定义脚本、证书及用户数据必须按实际备份清单核对。阿里云 DDNS 的旧域名格式有专门迁移，见平台说明。2.x、3.0.x 等版本直升兼容性另行验证。
 
 自有 APK 仓库、自动更新服务、发布资产完善、新设备和新 UI 不属于本次迁移范围。上游 APK 源不能提供 BoltWrt 自定义包，也不能保证匹配自编内核的模块；不得把上游更新能力视为定制固件已自动适配。
+
+2026-10-26 用户将后续运行验收缩减为云端虚拟环境中的启动、默认配置、APK/LuCI 和受控 3.1.2 升级；取消项及 ARM 仿真边界见 [云端验收交接](docs/4.0.0-cloud-validation.md)。该文档可供没有本机会话上下文的新云端会话直接执行；它不表示已完成云端测试或 RAX 板级启动。
 
 ## 来源与许可证
 
