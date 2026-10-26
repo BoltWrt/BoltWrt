@@ -206,6 +206,23 @@ class PrepareTests(unittest.TestCase):
         self.assertEqual(set(roots), {"feeds/packages/web", "feeds/packages/monitor",
                                      "feeds/packages/modem", "feeds/BoltWrt/proxy"})
 
+    def test_explicit_haproxy_backend_seeds_official_provider(self):
+        (self.root / "config/targets").mkdir(parents=True)
+        (self.root / "config/targets/x86-64.txt").write_text("")
+        common = self.root / "config/common.txt"
+        common.write_text("CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_Haproxy=y\n")
+        indexes = {"BoltWrt": {"feeds/BoltWrt/luci-app-passwall2": {"luci-app-passwall2"}},
+                   "packages": {"feeds/packages/net/haproxy": {"haproxy"},
+                                "feeds/packages/net/weechat": {"weechat"}}}
+        winners, _ = prepare.provider_plan(indexes)
+        self.assertNotIn("feeds/packages/net/haproxy", prepare.product_roots(
+            indexes, winners, prepare.positive_package_choices(self.root)))
+        with common.open("a") as handle:
+            handle.write("CONFIG_PACKAGE_haproxy=y\n")
+        roots = prepare.product_roots(indexes, winners, prepare.positive_package_choices(self.root))
+        self.assertEqual(roots, {"feeds/BoltWrt/luci-app-passwall2": "BoltWrt",
+                                 "feeds/packages/net/haproxy": "packages"})
+
     def test_legacy_registration_preserved_and_scoped_registration_repeats(self):
         source = self.root / "feeds/packages/unused"
         source.mkdir(parents=True)
