@@ -10,6 +10,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 TARGETS = ("x86-64", "cmcc-rax3000m")
+PASSWALL_CLIENT_BACKENDS = {
+    "Haproxy": ("haproxy",),
+    "Shadowsocks_Libev_Client": ("shadowsocks-libev-ss-local", "shadowsocks-libev-ss-redir"),
+    "Shadowsocks_Rust_Client": ("shadowsocks-rust-sslocal",),
+    "ShadowsocksR_Libev_Client": ("shadowsocksr-libev-ssr-local", "shadowsocksr-libev-ssr-redir"),
+    "Simple_Obfs": ("simple-obfs-client",),
+    "SingBox": ("sing-box",),
+    "V2ray_Plugin": ("v2ray-plugin",),
+}
 
 
 def read_config(path):
@@ -61,6 +70,14 @@ def verify(target):
         want[key] = value
     errors = [f"{key}: requested {value}, got {actual.get(key, 'n')}"
               for key, value in want.items() if actual.get(key, "n") != value]
+    # Package/config selects cannot register a missing official feed provider.
+    # Verify the actual backends even if an explicit product choice is removed.
+    for option, backends in PASSWALL_CLIENT_BACKENDS.items():
+        key = f"CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_{option}"
+        if actual.get(key) == "y":
+            for backend in backends:
+                if actual.get(f"CONFIG_PACKAGE_{backend}") != "y":
+                    errors.append(f"{key}: missing selected backend CONFIG_PACKAGE_{backend}=y")
     if not any(actual.get(f"CONFIG_PACKAGE_apk-{tls}") == "y"
                for tls in ("mbedtls", "openssl")):
         errors.append("no APK backend selected")
