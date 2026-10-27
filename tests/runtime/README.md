@@ -7,6 +7,14 @@ disks, mount product inputs read-only, and publish management ports on host
 not require `/dev/kvm`. Keep one VM active per container because its forwarding
 ports are shared.
 
+Start `python3 tcp_forward.py` once in that container before accessing the
+published management ports. It relays container ports 2222/8080/8443 through
+127.0.0.1 to the launcher's internal ports 2223/8081/8444. SLIRP can otherwise
+preserve a Docker bridge client's source address, to which the fresh guest LAN
+has no route. The relay preserves the product's default network configuration;
+it forwards opaque TCP bytes, has bounded connections/timeouts, and logs no
+payload. Continue to publish Docker ports on host loopback only.
+
 Build `Dockerfile` with the project's existing Ubuntu builder as `BASE_IMAGE`
 when its native OpenWrt host tools are needed. On restricted macOS hosts set
 `BUILDX_CONFIG` to a task directory inside the project before invoking Docker
