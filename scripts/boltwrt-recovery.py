@@ -101,10 +101,10 @@ def check_root(args, requests: list[str]) -> dict:
             f"unexpected production services in recovery: {production_packages(packages)}")
     files = ("etc/preinit", "sbin/procd", "sbin/netifd", "sbin/uci", "bin/ubus",
              "bin/busybox", "usr/sbin/dropbear", "sbin/sysupgrade", "lib/upgrade/platform.sh",
-             "lib/upgrade/nand.sh", "etc/board.d/99-boltwrt")
+             "lib/upgrade/nand.sh", "etc/board.d/99-zz-boltwrt")
     checked = {name: root_file(root, name) for name in files}
-    defaults = ROOT / "package/boltwrt-defaults/files/etc/board.d/99-boltwrt"
-    require(digest(checked["etc/board.d/99-boltwrt"]) == digest(defaults),
+    defaults = ROOT / "package/boltwrt-defaults/files/etc/board.d/99-zz-boltwrt"
+    require(digest(checked["etc/board.d/99-zz-boltwrt"]) == digest(defaults),
             "recovery LAN/defaults differ from the production defaults package")
     for service in ("network", "dropbear", "dnsmasq", "firewall"):
         entries = list((root / "etc/rc.d").glob("S[0-9][0-9]" + service))

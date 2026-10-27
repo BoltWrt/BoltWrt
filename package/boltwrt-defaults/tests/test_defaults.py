@@ -48,7 +48,7 @@ class DefaultsTest(unittest.TestCase):
         path.write_text(json.dumps({'network': {'lan': {'device': 'eth0', 'protocol': 'static'}},
                                     'system': {}}))
         env = dict(os.environ, CFG=str(path))
-        script = str(FILES / 'board.d/99-boltwrt')
+        script = str(FILES / 'board.d/99-zz-boltwrt')
         run(SHELL, script, env=env)
         first = json.loads(path.read_text())
         run(SHELL, script, env=env)
@@ -58,6 +58,55 @@ class DefaultsTest(unittest.TestCase):
 
     def generate(self):
         run(SHELL, str(ROOT / 'package/base-files/files/bin/config_generate'))
+
+    def detect_and_generate(self, initial):
+        """Execute real board hooks in board_detect's filename order."""
+        path = Path('/tmp/boltwrt-board.json')
+        path.write_text(json.dumps(initial))
+        env = dict(os.environ, CFG=str(path))
+        scripts = [ROOT / 'package/base-files/files/etc/board.d/99-default_network',
+                   FILES / 'board.d/99-zz-boltwrt']
+        for script in sorted(scripts, key=lambda item: item.name):
+            run(SHELL, str(script), env=env)
+        board = json.loads(path.read_text())
+        Path('/etc/board.json').write_text(path.read_text())
+        self.generate()
+        return board
+
+    def test_generic_board_fallback_precedes_boltwrt_defaults(self):
+        board = self.detect_and_generate({'system': {}})
+        self.assertEqual(board['network']['lan']['device'], 'eth0')
+        self.assertEqual(board['network']['lan']['protocol'], 'static')
+        self.assertEqual(get('network.lan.device'), 'br-lan')
+        self.assertEqual(get('network.@device[0].ports'), 'eth0')
+        self.assertEqual(get('network.lan.proto'), 'static')
+        self.assertEqual(get('network.lan.ipaddr'), '10.126.0.1/18')
+
+    def test_board_fallback_preserves_explicit_hardware_interfaces(self):
+        network = {'lan': {'device': 'lan0', 'protocol': 'static'},
+                   'wan': {'device': 'wan0', 'protocol': 'dhcp'}}
+        board = self.detect_and_generate({'network': network, 'system': {}})
+        self.assertEqual(board['network']['lan']['device'], 'lan0')
+        self.assertEqual(board['network']['lan']['protocol'], 'static')
+        self.assertEqual(board['network']['wan'], network['wan'])
+        self.assertEqual(get('network.@device[0].ports'), 'lan0')
+        self.assertEqual(get('network.lan.ipaddr'), '10.126.0.1/18')
+        self.assertEqual(get('network.wan.device'), 'wan0')
+        self.assertEqual(get('network.wan.proto'), 'dhcp')
+
+    def test_board_fallback_keeps_existing_user_network(self):
+        path = Path('/etc/config/network')
+        original = ("config interface 'lan'\n option device 'user-lan'\n"
+                    " option proto 'static'\n option ipaddr '192.168.7.1'\n"
+                    " option netmask '255.255.255.0'\n"
+                    "config interface 'wan'\n option device 'user-wan'\n"
+                    " option proto 'dhcp'\n")
+        path.write_text(original)
+        self.detect_and_generate({'system': {}})
+        self.assertEqual(path.read_bytes(), original.encode())
+        self.assertEqual(get('network.lan.device'), 'user-lan')
+        self.assertEqual(get('network.lan.ipaddr'), '192.168.7.1')
+        self.assertEqual(get('network.wan.device'), 'user-wan')
 
     def test_fresh_install_and_repeated_generation(self):
         board = self.board()
