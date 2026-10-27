@@ -40,9 +40,9 @@ class RecoveryGuards(unittest.TestCase):
             path = root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('structural fixture only: ' + name + '\n')
-        defaults = root / 'etc/board.d/99-boltwrt'
+        defaults = root / 'etc/board.d/99-zz-boltwrt'
         defaults.parent.mkdir(parents=True)
-        defaults.write_bytes((REPO / 'package/boltwrt-defaults/files/etc/board.d/99-boltwrt').read_bytes())
+        defaults.write_bytes((REPO / 'package/boltwrt-defaults/files/etc/board.d/99-zz-boltwrt').read_bytes())
         (root / 'etc/rc.d').mkdir()
         (root / 'etc/init.d').mkdir()
         for service in ('network', 'dropbear', 'dnsmasq', 'firewall'):
@@ -91,6 +91,24 @@ class RecoveryGuards(unittest.TestCase):
         record = recovery.check_root(args, self.requests)
         self.assertEqual(record['package_count'], 51)
         self.assertIn('no target execution or boot validation', record['scope'])
+        defaults = 'etc/board.d/99-zz-boltwrt'
+        self.assertEqual(record['checked_files'][defaults],
+                         recovery.digest(REPO / 'package/boltwrt-defaults/files' / defaults))
+
+    def test_reject_legacy_defaults_hook_even_with_matching_content(self):
+        args = self.make_root()
+        defaults = args.root / 'etc/board.d/99-zz-boltwrt'
+        defaults.rename(defaults.with_name('99-boltwrt'))
+        with self.assertRaises(FileNotFoundError) as error:
+            recovery.check_root(args, self.requests)
+        self.assertIn('99-zz-boltwrt', str(error.exception))
+
+    def test_reject_changed_defaults_hook_content(self):
+        args = self.make_root()
+        defaults = args.root / 'etc/board.d/99-zz-boltwrt'
+        defaults.write_bytes(defaults.read_bytes() + b'\n# changed fixture\n')
+        with self.assertRaisesRegex(ValueError, 'LAN/defaults differ'):
+            recovery.check_root(args, self.requests)
 
     def test_reject_production_or_symlink_root(self):
         args = self.make_root()
