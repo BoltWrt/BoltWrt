@@ -32,6 +32,8 @@ expect network.lan.netmask 255.255.255.0
 expect system.@system[0].hostname "boltwrt-upgrade-$intent"
 expect system.ntp.enabled 0
 expect system.ntp.server time.fixture.invalid
+expect luci.main.mediaurlbase /luci-static/argon
+expect luci.main.lang en
 expect ddns.boltwrt_upgrade_fixture service
 expect ddns.boltwrt_upgrade_fixture.enabled 0
 expect ddns.boltwrt_upgrade_fixture.domain fixture.example.invalid
