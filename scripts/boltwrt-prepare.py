@@ -22,6 +22,67 @@ PATCHES = {
             ("option mediaurlbase /luci-static/bootstrap", "option mediaurlbase /luci-static/argon")],
         "collections/luci-nginx/Makefile": [
             ("\t+luci-theme-bootstrap \\\n", "")],
+        "applications/luci-app-package-manager/Makefile": [
+            ("LUCI_TITLE:=Package management application\n",
+             # A distinct release for the patched, locked LuCI source.
+             "PKG_VERSION:=26.288.56989~75a306d\nPKG_RELEASE:=1\n\n"
+             "LUCI_TITLE:=Package management application\n"),
+            ("LUCI_DEPENDS:=+luci-base\n", "LUCI_DEPENDS:=+luci-base +uclient-fetch\n")],
+        "applications/luci-app-package-manager/root/usr/libexec/package-manager-call": [
+            ("\t\t(\n\t\t\tcmd=", """\t\t(
+\t\t\tumask 077
+\t\t\tif ! temporary=$(mktemp -d /tmp/luci-package-manager.XXXXXX); then
+\t\t\t\tjson_init
+\t\t\t\tjson_add_int code 255
+\t\t\t\tjson_add_string stderr "Failed to create package manager temporary directory"
+\t\t\t\tjson_dump
+\t\t\t\texit 0
+\t\t\tfi
+\t\t\ttrap 'rm -rf -- "$temporary"' EXIT
+\t\t\ttrap 'exit 1' HUP INT TERM
+\t\t\tcmd="""),
+            ("""\t\t\t\tpkmcmd="$cmd $action $@"
+\t\t\t\t$cmd $action "$@" </dev/null >/tmp/ipkg.out 2>/tmp/ipkg.err
+\t\t\t\tcode=$?
+\t\t\t\tstdout=$(cat /tmp/ipkg.out)
+\t\t\t\tstderr=$(cat /tmp/ipkg.err)""", """\t\t\t\tpkmcmd="$cmd $action $@"
+\t\t\t\tcode=0
+\t\t\t\t: > "$temporary/out"
+\t\t\t\t: > "$temporary/err"
+\t\t\t\t# APK accepts local .apk files, not HTTP(S) package URLs.
+\t\t\t\tif [ "$ipkg_bin" = apk ] && [ "$action" = add ]; then
+\t\t\t\t\tfor package in "$@"; do
+\t\t\t\t\t\tcase "$package" in
+\t\t\t\t\t\t\thttp://*|https://*)
+\t\t\t\t\t\t\t\tif [ "$#" -ne 1 ]; then
+\t\t\t\t\t\t\t\t\tcode=2
+\t\t\t\t\t\t\t\t\tprintf '%s\\n' "A package URL must be the only package argument" > "$temporary/err"
+\t\t\t\t\t\t\t\telse
+\t\t\t\t\t\t\t\t\t/bin/uclient-fetch -q -T 30 -O "$temporary/download.apk" -- "$package" > "$temporary/out" 2> "$temporary/err"
+\t\t\t\t\t\t\t\t\tcode=$?
+\t\t\t\t\t\t\t\t\tif [ "$code" -ne 0 ]; then
+\t\t\t\t\t\t\t\t\t\tprintf 'Package download failed (uclient-fetch exit %s)\\n' "$code" >> "$temporary/err"
+\t\t\t\t\t\t\t\t\telif [ ! -s "$temporary/download.apk" ]; then
+\t\t\t\t\t\t\t\t\t\tcode=1
+\t\t\t\t\t\t\t\t\t\tprintf '%s\\n' "Downloaded package is empty" >> "$temporary/err"
+\t\t\t\t\t\t\t\t\telse
+\t\t\t\t\t\t\t\t\t\tset -- "$temporary/download.apk"
+\t\t\t\t\t\t\t\t\tfi
+\t\t\t\t\t\t\t\tfi
+\t\t\t\t\t\t\t\tbreak
+\t\t\t\t\t\t\t;;
+\t\t\t\t\t\tesac
+\t\t\t\t\tdone
+\t\t\t\tfi
+\t\t\t\tif [ "$code" -eq 0 ]; then
+\t\t\t\t\t$cmd $action "$@" </dev/null >> "$temporary/out" 2>> "$temporary/err"
+\t\t\t\t\tcode=$?
+\t\t\t\tfi
+\t\t\t\tstdout=$(cat "$temporary/out")
+\t\t\t\tstderr=$(cat "$temporary/err")"""),
+            ("\n\t\trm -f /tmp/ipkg.lock /tmp/ipkg.err /tmp/ipkg.out\n",
+             # Keep the inode stable for requests already waiting on flock.
+             "\n")],
     },
     "packages": {
         "net/nginx-util/src/nginx-ssl-util.hpp": [

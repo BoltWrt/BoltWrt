@@ -55,3 +55,15 @@ never include real user configuration or secrets in these fixtures.
 Runtime evidence must distinguish fresh installation, reboot, real APK version
 upgrade, LuCI interaction and an actual guest `sysupgrade`. Build success,
 source inspection and generic ARM execution do not close hardware acceptance.
+
+The locked LuCI APK backend downloads a single HTTP(S) package URL to a private
+temporary `.apk` before invoking the normal installer. Test a separately signed
+copy trusted by the guest, an unsigned package, a missing URL, an empty response,
+a self-signed HTTPS endpoint and a URL mixed with another package argument.
+Only the trusted signed copy may install; failures must leave the installed
+database and world unchanged. Repository index signatures do not make an
+unsigned package trusted when installed as a standalone file. Never add
+`--allow-untrusted` to the backend or its installation/verification tests.
+The downloader's 30-second timeout covers connection/request inactivity, not
+an overall wall-clock deadline. Check that request directories are cleaned and
+the shared lock inode remains present after requests complete.
