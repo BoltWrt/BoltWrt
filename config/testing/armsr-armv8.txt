@@ -1,0 +1,19 @@
+# Auxiliary QEMU virt fixture, not a supported BoltWrt product target.
+CONFIG_TARGET_armsr=y
+CONFIG_TARGET_armsr_armv8=y
+CONFIG_TARGET_armsr_armv8_DEVICE_generic=y
+# Explicit fixture override of common.txt; SquashFS remains selected too.
+CONFIG_TARGET_ROOTFS_EXT4FS=y
+CONFIG_TARGET_ROOTFS_PARTSIZE=512
+CONFIG_TARGET_KERNEL_PARTSIZE=128
+CONFIG_TARGET_SERIAL="ttyAMA0"
+# Retain the applicable RAX storage and file-sharing user functionality.
+CONFIG_PACKAGE_block-mount=y
+CONFIG_PACKAGE_kmod-usb-storage-uas=y
+CONFIG_PACKAGE_kmod-fs-ext4=y
+CONFIG_PACKAGE_kmod-fs-exfat=y
+CONFIG_PACKAGE_kmod-fs-ntfs3=y
+CONFIG_PACKAGE_kmod-fs-vfat=y
+CONFIG_PACKAGE_luci-app-samba4=y
+CONFIG_PACKAGE_samba4-server=y
+CONFIG_PACKAGE_wsdd2=y
