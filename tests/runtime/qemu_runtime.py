@@ -100,9 +100,11 @@ def launch(args):
         device = "virtio-net-pci"
     network = ("user,id=lan,net=10.126.0.0/18,host=10.126.0.2,dns=10.126.0.3,"
                "dhcpstart=10.126.0.10,"
-               f"hostfwd=tcp:0.0.0.0:{args.ssh_port}-10.126.0.1:22,"
-               f"hostfwd=tcp:0.0.0.0:{args.http_port}-10.126.0.1:80,"
-               f"hostfwd=tcp:0.0.0.0:{args.https_port}-10.126.0.1:443")
+               # A container loopback relay keeps Docker client addresses out
+               # of the guest. Its LAN has no default route on a fresh image.
+               f"hostfwd=tcp:127.0.0.1:{args.ssh_port}-10.126.0.1:22,"
+               f"hostfwd=tcp:127.0.0.1:{args.http_port}-10.126.0.1:80,"
+               f"hostfwd=tcp:127.0.0.1:{args.https_port}-10.126.0.1:443")
     command += ["-netdev", network, "-device", device + ",netdev=lan"]
     record = {"source": str(source), "source_sha256": args.sha256,
               "disk_info": info, "command": command, "arch": args.arch,
@@ -272,7 +274,7 @@ def main():
     start.add_argument("--efi-code", type=Path)
     start.add_argument("--efi-vars", type=Path)
     start.add_argument("--memory", type=int, default=768)
-    for name, port in (("ssh", 2222), ("http", 8080), ("https", 8443)):
+    for name, port in (("ssh", 2223), ("http", 8081), ("https", 8444)):
         start.add_argument("--" + name + "-port", type=int, default=port)
     run = actions.add_parser("exec")
     run.add_argument("--case", required=True, type=Path)
