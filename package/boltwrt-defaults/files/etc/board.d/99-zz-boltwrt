@@ -1,6 +1,7 @@
 #!/bin/sh
 # Board defaults feed config_generate only when network/system are missing.
 # Existing UCI configuration restored by sysupgrade takes precedence.
+# Run after 99-default_network so generic boards retain its device fallback.
 . /lib/functions/uci-defaults.sh
 
 board_config_update
