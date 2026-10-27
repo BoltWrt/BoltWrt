@@ -7,6 +7,14 @@ disks, mount product inputs read-only, and publish management ports on host
 not require `/dev/kvm`. Keep one VM active per container because its forwarding
 ports are shared.
 
+Start `python3 tcp_forward.py` once in that container before accessing the
+published management ports. It relays container ports 2222/8080/8443 through
+127.0.0.1 to the launcher's internal ports 2223/8081/8444. SLIRP can otherwise
+preserve a Docker bridge client's source address, to which the fresh guest LAN
+has no route. The relay preserves the product's default network configuration;
+it forwards opaque TCP bytes, has bounded connections/timeouts, and logs no
+payload. Continue to publish Docker ports on host loopback only.
+
 Build `Dockerfile` with the project's existing Ubuntu builder as `BASE_IMAGE`
 when its native OpenWrt host tools are needed. On restricted macOS hosts set
 `BUILDX_CONFIG` to a task directory inside the project before invoking Docker
@@ -47,3 +55,15 @@ never include real user configuration or secrets in these fixtures.
 Runtime evidence must distinguish fresh installation, reboot, real APK version
 upgrade, LuCI interaction and an actual guest `sysupgrade`. Build success,
 source inspection and generic ARM execution do not close hardware acceptance.
+
+The locked LuCI APK backend downloads a single HTTP(S) package URL to a private
+temporary `.apk` before invoking the normal installer. Test a separately signed
+copy trusted by the guest, an unsigned package, a missing URL, an empty response,
+a self-signed HTTPS endpoint and a URL mixed with another package argument.
+Only the trusted signed copy may install; failures must leave the installed
+database and world unchanged. Repository index signatures do not make an
+unsigned package trusted when installed as a standalone file. Never add
+`--allow-untrusted` to the backend or its installation/verification tests.
+The downloader's 30-second timeout covers connection/request inactivity, not
+an overall wall-clock deadline. Check that request directories are cleaned and
+the shared lock inode remains present after requests complete.
