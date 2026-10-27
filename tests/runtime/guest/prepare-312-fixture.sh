@@ -22,7 +22,7 @@ negative=/usr/local/boltwrt-upgrade-negative-control
 [ -f /usr/lib/opkg/status ] || fail 'old opkg database absent'
 [ -x /etc/init.d/haproxy ] || fail 'old haproxy init absent'
 [ -f /rom/etc/haproxy.cfg ] && cmp -s /etc/haproxy.cfg /rom/etc/haproxy.cfg || fail 'haproxy config is not the untouched image default'
-for package in network system ddns sqm nginx; do
+for package in network system ddns sqm nginx luci; do
     [ -z "$(uci changes "$package")" ] || fail "pending UCI changes in $package"
 done
 [ "$(uci get network.lan)" = interface ] || fail 'LAN section missing'
@@ -30,6 +30,7 @@ done
 [ "$(uci get system.@system[0])" = system ] || fail 'system section absent'
 [ "$(uci get system.ntp)" = timeserver ] || fail 'named NTP section absent'
 [ "$(uci get nginx._lan)" = server ] || fail 'nginx LAN server absent'
+[ "$(uci get luci.main)" = core ] || fail 'LuCI main section absent or unexpected'
 case "$(uci get nginx.global.uci_enable)" in 1|true) ;; *) fail 'nginx UCI configuration is disabled';; esac
 [ "$(uci get nginx._lan.uci_manage_ssl)" = self-signed ] || fail 'unexpected certificate-management mode'
 for section in ddns.boltwrt_upgrade_fixture sqm.boltwrt_upgrade_fixture; do
@@ -78,6 +79,8 @@ uci set system.@system[0].hostname="boltwrt-upgrade-$intent"
 uci set system.ntp.enabled=0
 uci -q delete system.ntp.server || :
 uci add_list system.ntp.server=time.fixture.invalid
+uci set luci.main.mediaurlbase=/luci-static/argon
+uci set luci.main.lang=en
 uci set ddns.boltwrt_upgrade_fixture=service
 uci set ddns.boltwrt_upgrade_fixture.enabled=0
 uci set ddns.boltwrt_upgrade_fixture.domain=fixture.example.invalid
@@ -94,7 +97,7 @@ uci set sqm.boltwrt_upgrade_fixture.use_mq=1
 uci set nginx._lan.ssl_certificate="$root/test.crt"
 uci set nginx._lan.ssl_certificate_key="$root/test.key"
 uci delete nginx._lan.uci_manage_ssl
-for package in network system ddns sqm nginx; do uci commit "$package"; done
+for package in network system ddns sqm nginx luci; do uci commit "$package"; done
 case "$intent" in enabled) /etc/init.d/haproxy enable;; disabled) /etc/init.d/haproxy disable;; esac
 if /etc/init.d/haproxy enabled; then actual=enabled; else actual=disabled; fi
 [ "$actual" = "$intent" ] || fail 'haproxy intent could not be set'
