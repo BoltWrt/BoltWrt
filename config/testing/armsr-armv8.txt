@@ -6,7 +6,8 @@ CONFIG_TARGET_armsr_armv8_DEVICE_generic=y
 CONFIG_TARGET_ROOTFS_EXT4FS=y
 CONFIG_TARGET_ROOTFS_PARTSIZE=512
 CONFIG_TARGET_KERNEL_PARTSIZE=128
-CONFIG_TARGET_SERIAL="ttyAMA0"
+# Upstream inittab already lists PL011 ttyAMA0; retain the default alternate tty.
+CONFIG_TARGET_SERIAL="ttyS0"
 # Retain the applicable RAX storage and file-sharing user functionality.
 CONFIG_PACKAGE_block-mount=y
 CONFIG_PACKAGE_kmod-usb-storage-uas=y
