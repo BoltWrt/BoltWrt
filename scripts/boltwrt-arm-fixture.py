@@ -155,6 +155,49 @@ def manifest_evidence(path, groups):
             "scope": "actual supplied image manifest; no runtime proof"}
 
 
+def input_hashes(root, names):
+    return {name: sha(root / name) for name in (*names, "config/source-lock.json",
+            "config/targets/cmcc-rax3000m.txt", "scripts/boltwrt-arm-fixture.py",
+            "scripts/boltwrt-verify.py")}
+
+
+def prepare_history(out):
+    """Append-only attempts; a failed/latest incomplete attempt never grants rerun."""
+    ledger = out / "prepare-attempts"
+    for path in (out.parent.parent, out.parent, out, ledger):
+        if path.is_symlink():
+            raise ValueError(f"refuse symlink prepare history: {path}")
+    if not ledger.exists():
+        return ledger, []
+    if not ledger.is_dir():
+        raise ValueError("prepare history is not a directory")
+    attempts = sorted(ledger.iterdir())
+    if any(not re.fullmatch(r"[0-9]{8}", path.name) or path.is_symlink()
+           or not path.is_dir() for path in attempts):
+        raise ValueError("unknown prepare history entry")
+    if [path.name for path in attempts] != [f"{n:08d}" for n in range(1, len(attempts) + 1)]:
+        raise ValueError("incomplete prepare history sequence")
+    return ledger, attempts
+
+
+def require_recorded_prepare(root, attempts, inputs):
+    if not attempts:
+        raise ValueError("non-raw .config has no successful fixture prepare record")
+    last = attempts[-1]
+    for name in ("evidence.json", "resolved.config", "defconfig.exit", "defconfig.log"):
+        path = last / name
+        if not path.is_file() or path.is_symlink():
+            raise ValueError("latest fixture prepare did not complete successfully")
+    proof = json.loads((last / "evidence.json").read_text())
+    if (proof.get("prepare_status") != "defconfig-success"
+            or proof.get("input_sha256") != inputs
+            or proof.get("config_sha256") != sha(root / ".config")
+            or (last / "resolved.config").read_bytes() != (root / ".config").read_bytes()
+            or (last / "defconfig.exit").read_text().strip() != "0"
+            or proof.get("defconfig_log_sha256") != sha(last / "defconfig.log")):
+        raise ValueError("unknown .config or stale/failed fixture prepare provenance")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parent.parent)
@@ -168,22 +211,29 @@ def main():
     want, overrides, names = compose(root)
     if args.manifest and not args.check_only:
         raise ValueError("--manifest requires --check-only; do not replace a built configuration")
+    inputs = input_hashes(root, names)
+    config = root / ".config"
+    if config.is_symlink():
+        raise ValueError("refuse symlink .config")
+    attempt = None
     if not args.check_only:
         text = "# Auxiliary VM fixture, not a supported product target.\n"
         text += "\n".join(f"# {key} is not set" if value == "n" else f"{key}={value}"
                           for key, value in want.items()) + "\n"
-        config = root / ".config"
-        if config.is_symlink():
-            raise ValueError("refuse symlink .config")
-        if config.exists() and config.read_text() != text:
-            # A rerun accepts exactly an already resolved, valid fixture, not another target.
+        ledger, attempts = prepare_history(out)
+        if config.exists() and config.read_bytes() != text.encode():
+            require_recorded_prepare(root, attempts, inputs)
             check(root, want)
-        else:
+        # Reject unknown config before creating an attempt or invoking make.
+        ledger.mkdir(parents=True, exist_ok=True)
+        attempt = ledger / f"{len(attempts) + 1:08d}"
+        attempt.mkdir()
+        if not config.exists():
             write_atomic(config, text.encode())
         result = subprocess.run(["make", "defconfig"], cwd=root, text=True,
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        write_atomic(out / "defconfig.log", result.stdout.encode())
-        write_atomic(out / "defconfig.exit", f"{result.returncode}\n".encode())
+        write_atomic(attempt / "defconfig.log", result.stdout.encode())
+        write_atomic(attempt / "defconfig.exit", f"{result.returncode}\n".encode())
         print(result.stdout, end="", flush=True)
         result.check_returncode()
         if re.search(r"(?m)^(?:[^\n]*:[0-9]+:error:|.*recursive dependency detected!)", result.stdout):
@@ -192,9 +242,7 @@ def main():
     evidence = {
         "fixture": "armsr/armv8 generic QEMU virt", "product_target": False,
         "scope": "resolved auxiliary config; no build, boot, EFI or RAX board acceptance",
-        "input_sha256": {name: sha(root / name) for name in (*names, "config/source-lock.json",
-                          "config/targets/cmcc-rax3000m.txt", "scripts/boltwrt-arm-fixture.py",
-                          "scripts/boltwrt-verify.py")},
+        "input_sha256": inputs,
         "explicit_common_overrides": overrides,
         "excluded_rax_hardware": sorted(RAX_HARDWARE),
         "replaced_rax_image_options": sorted(RAX_IMAGE_OPTIONS),
@@ -210,9 +258,20 @@ def main():
             raise ValueError("manifest must be from this root's bin/targets/armsr/armv8")
         evidence["manifest"] = manifest_evidence(manifest, service_packages(root))
         evidence["scope"] = "resolved auxiliary config and actual manifest; no runtime acceptance"
-    write_atomic(out / "resolved.config", (root / ".config").read_bytes())
-    write_atomic(out / "evidence.json", (json.dumps(evidence, indent=2, sort_keys=True) + "\n").encode())
-    print(f"Auxiliary fixture checked; evidence: {out / 'evidence.json'}")
+    if args.check_only:
+        # Inspection cannot create/refresh prepare success provenance.
+        evidence["mode"] = "read-only-check"
+        print(json.dumps(evidence, indent=2, sort_keys=True))
+        return
+    if input_hashes(root, names) != inputs:
+        raise ValueError("fixture inputs changed during defconfig")
+    evidence["prepare_status"] = "defconfig-success"
+    evidence["defconfig_log_sha256"] = sha(attempt / "defconfig.log")
+    write_atomic(attempt / "resolved.config", config.read_bytes())
+    # Last commit point. Failed make/check/input drift leaves no success record.
+    write_atomic(attempt / "evidence.json", (json.dumps(evidence, indent=2, sort_keys=True) + "\n").encode())
+    print(f"Auxiliary fixture prepared; evidence: {attempt / 'evidence.json'}")
+
 
 
 if __name__ == "__main__":
