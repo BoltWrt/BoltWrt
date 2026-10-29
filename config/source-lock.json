@@ -38,15 +38,15 @@
     "BoltWrt": {
       "type": "src-git",
       "url": "https://github.com/BoltWrt/Packages.git",
-      "commit": "af74fe86ff3b8729b48d1977a9032ab7946014e2",
+      "commit": "5d39a4f534568dd2afd3c444204439749047cf3e",
       "patch_manifest": "compat/openwrt-25.12.json"
     }
   },
   "submodules": {
     "BoltWrt": {
       "luci/theme/luci-theme-argon": "f075cb18cb83d0108a18f79b17888420e3d2d986",
-      "net/openwrt-smartdns": "5cdbd394a29b8b24659c116c49e0565e98d78305",
-      "luci/applications/luci-app-smartdns": "53c00a368f78cda75486d1551de536fc2e1884f1"
+      "net/openwrt-smartdns": "1db3543cfaa397cd1115b0479416f73062711a63",
+      "luci/applications/luci-app-smartdns": "581e5e816d92d3a663b1b2e331e3f21685968cf1"
     }
   }
 }
