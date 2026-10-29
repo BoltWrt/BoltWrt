@@ -108,7 +108,7 @@ class PrepareTests(unittest.TestCase):
         self.git(repo, "commit", "-qm", "compatibility fixture")
         spec = {"patch_manifest": "compat.json"}
         expected = prepare.submodule_patches(repo, spec, {child: sha})
-        self.assertEqual(len(expected[child]["Makefile"]), 2)  # Existing Rust edit plus source pin.
+        self.assertEqual(len(expected[child]["Makefile"]), 1)
         self.assertEqual(expected, prepare.submodule_patches(repo, spec, {child: sha}))
         manifest_path.write_text("not committed data")
         self.assertEqual(expected, prepare.submodule_patches(repo, spec, {child: sha}))
@@ -116,6 +116,20 @@ class PrepareTests(unittest.TestCase):
             prepare.submodule_patches(repo, spec, {child: "2" * 40})
         with self.assertRaises(prepare.PrepareError):
             prepare.submodule_patches(repo, {"patch_manifest": "../outside"}, {child: sha})
+
+    def test_empty_manifest_keeps_updated_smartdns_pristine(self):
+        repo = self.repo()
+        (repo / "compat.json").write_text(json.dumps({"submodules": {}}))
+        self.git(repo, "add", "compat.json")
+        self.git(repo, "commit", "-qm", "retire obsolete compatibility edits")
+        child = "net/openwrt-smartdns"
+        patches = prepare.submodule_patches(
+            repo, {"patch_manifest": "compat.json"}, {child: "1" * 40})
+        self.assertEqual(patches, {})
+        self.assertEqual(prepare.check_worktree(repo, patches), {})
+        (repo / "Makefile").write_text("include unreviewed-path\n")
+        with self.assertRaisesRegex(prepare.PrepareError, "unknown modifications"):
+            prepare.check_worktree(repo, patches)
 
     def test_source_names_differ_but_binary_provider_conflict_is_detected(self):
         custom = "feeds/BoltWrt/net/openwrt-smartdns"

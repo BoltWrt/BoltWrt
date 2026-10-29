@@ -91,11 +91,6 @@ PATCHES = {
             ("constexpr auto validity_days = 3 * (365 + 31);", "constexpr auto validity_days = 3650;")],
     },
 }
-SMARTDNS_PATCH = {"Makefile": [
-    ("include ../../lang/rust/rust-package.mk",
-     "include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk")]}
-
-
 def run(argv, cwd, env=None):
     command_env = dict(os.environ if env is None else env,
                        GIT_TERMINAL_PROMPT="0", LC_ALL="C")
@@ -228,8 +223,6 @@ def submodule_urls(repo):
 
 def submodule_patches(repo, spec, children):
     result = {}
-    if "net/openwrt-smartdns" in children:
-        result["net/openwrt-smartdns"] = {name: list(edits) for name, edits in SMARTDNS_PATCH.items()}
     if "patch_manifest" not in spec:
         return result
     if not isinstance(spec["patch_manifest"], str):
