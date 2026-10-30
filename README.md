@@ -33,7 +33,7 @@ GOTOOLCHAIN=local make -j4 V=s CONFIG_GOLANG_BUILD_BOOTSTRAP= \
 
 RAX3000M/Me 使用独立干净构建目录，把目标参数换为 `cmcc-rax3000m`。准备脚本按 `config/source-lock.json` 抓取完整 SHA，验证子模块与已知补丁；不依赖旧版 Go/Python 覆盖或已有下载缓存。重复执行接受已知幂等补丁，遇到源版本、补丁锚点、未知修改或额外包提供者漂移时失败并保留原文件。`defconfig` 后逐项核对产品选择，阻止静默丢失组件或仅有 LuCI 页面而无后端。
 
-自定义 feed 锁定 `e2ebf9392ec066fd901a1b17099812274fc13118`，包含本轮安全和 LuCI 修复。该提交目前只在本地，尚未推送 GitHub；本机准备须显式指定含该提交的 Packages 仓库，不能把旧公开提交作为替代：
+自定义 feed 锁定 `43dee65074096b99e30cb83f29c2d85289e0788c`，包含本轮安全和 LuCI 修复。该提交目前只在本地，尚未推送 GitHub；本机准备须显式指定含该提交的 Packages 仓库，不能把旧公开提交作为替代：
 
 ```sh
 python3 scripts/boltwrt-prepare.py --local-feed /absolute/path/to/Packages
