@@ -33,13 +33,15 @@ GOTOOLCHAIN=local make -j4 V=s CONFIG_GOLANG_BUILD_BOOTSTRAP= \
 
 RAX3000M/Me 使用独立干净构建目录，把目标参数换为 `cmcc-rax3000m`。准备脚本按 `config/source-lock.json` 抓取完整 SHA，验证子模块与已知补丁；不依赖旧版 Go/Python 覆盖或已有下载缓存。重复执行接受已知幂等补丁，遇到源版本、补丁锚点、未知修改或额外包提供者漂移时失败并保留原文件。`defconfig` 后逐项核对产品选择，阻止静默丢失组件或仅有 LuCI 页面而无后端。
 
-自定义 feed 的锁定提交 `af74fe86ff3b8729b48d1977a9032ab7946014e2` 已可从公开的 `BoltWrt/Packages` 仓库取得，干净环境可直接使用默认准备命令。若使用已有的本地源码镜像，可显式指定含该提交的 Packages 仓库：
+自定义 feed 锁定 `e2ebf9392ec066fd901a1b17099812274fc13118`，包含本轮安全和 LuCI 修复。该提交目前只在本地，尚未推送 GitHub；本机准备须显式指定含该提交的 Packages 仓库，不能把旧公开提交作为替代：
 
 ```sh
 python3 scripts/boltwrt-prepare.py --local-feed /absolute/path/to/Packages
 ```
 
 该入口仅替换抓取位置，仍核对同一个 commit 和全部子模块 SHA。官方五项 feeds、工具链版本及自定义 feed/gitlink 固定值均见 `config/source-lock.json`。准备与配置证据写入忽略目录 `logs/`；实际固件在 `bin/targets/x86/64/` 或 `bin/targets/mediatek/filogic/`。
+
+本轮 Go、ChinaDNS/wolfSSL、SSR、v2ray-plugin 及 PassWall2 浏览器修复的来源和验收状态见 [安全与浏览器复核](docs/4.0.0-security-browser.md)。源码提交、目标编译和运行证据分别记录，旧镜像不追认为修复后的产物。
 
 ## 平台和默认配置
 
