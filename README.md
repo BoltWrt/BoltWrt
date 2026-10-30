@@ -20,7 +20,7 @@ python3 scripts/boltwrt-verify.py x86-64
 
 顶层 `make download` 不覆盖所有 host 构建依赖；实际编译仍可能补取固定 recipe 的输入，不能据该命令返回 0 推定离线构建已具备全部源码。
 
-在 ARM64 Linux 构建宿主上，上游 Go 1.4 自举起点不可用。可使用宿主已有、满足 [Go 1.26.9 自举要求](https://github.com/golang/go/blob/go1.26.9/src/make.bash)的 Go（至少 1.24.6），在每次编译命令中同时取消内部 bootstrap 并指定其根目录。本次隔离构建已用固定镜像内 Go 1.26.8 自举出实际 Go 1.26.9；产品共享配置和锁定 feed 不需要修改：
+在 ARM64 Linux 构建宿主上，上游 Go 1.4 自举起点不可用。可使用宿主已有、满足 [Go 1.26.10 自举要求](https://github.com/golang/go/blob/go1.26.10/src/make.bash)的 Go（至少 1.24.6），在每次编译命令中同时取消内部 bootstrap 并指定其根目录。准备脚本在固定 feed 上精确应用 Go 1.26.10 安全补丁版及官方源码散列，修复 [GO-2026-6809](https://pkg.go.dev/vuln/GO-2026-6809)，不滚动升级 feed。此前产物实际使用 Go 1.26.9，更新后的 Go 程序仍须重新构建验收；镜像内 Go 1.26.8 仅为 bootstrap：
 
 ```sh
 go_root="$(GOTOOLCHAIN=local go env GOROOT)" || exit 1
