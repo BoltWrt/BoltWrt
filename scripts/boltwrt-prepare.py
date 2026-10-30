@@ -85,6 +85,13 @@ PATCHES = {
              "\n")],
     },
     "packages": {
+        # GO-2026-6809 / CVE-2026-111943: keep the locked 1.26 series and
+        # rebuild every Go payload with the intermediate-certificate denylist.
+        # Official go1.26.10 source: 4e8c85f5319d999bfd7617fdc191631e5634e3c5.
+        "lang/golang/golang1.26/Makefile": [
+            ("GO_VERSION_PATCH:=9\n", "GO_VERSION_PATCH:=10\n"),
+            ("PKG_HASH:=9735d7dcdb65b35d3fa577f04064737c03b89cf1a2b71e6e69fe2f3c6f9fd4ca\n",
+             "PKG_HASH:=fd63e883ba2f2bfca93c1646b31ebef63e2b1e4d2b317c9789d976a68d81f36f\n")],
         "net/nginx-util/src/nginx-ssl-util.hpp": [
             ("/C=ZZ/ST=Somewhere/L=None/CN=OpenWrt/O=OpenWrt",
              "/C=CN/ST=Beijing/L=Beijing/CN=BoltWrt/O=BoltWrt"),
