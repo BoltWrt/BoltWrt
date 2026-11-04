@@ -4,6 +4,8 @@ BoltWrt 基于 OpenWrt 正式稳定版，迁回必要定制并维护平台配置
 
 firewall4/nftables、WireGuard 和双平台支持是已有能力。4.0.0 保留 DNS、DDNS、透明代理、SQM、UPnP、OpenVPN、ocserv、frpc 等功能，并通过新版本依赖解析和最终固件 manifest 核对实际前后端。
 
+PassWall2 的 Hysteria2 由已选 Sing-box 的 QUIC 模块提供：添加节点时选择 `Sing-Box`，协议选择 `Hysteria2`。无需另装独立 `hysteria` 核心；当前 RAX 配置、实际核心 build tags、APK 和生产 FIT 已核对，最终 x86 界面与生成配置检查仍在本轮验收中。
+
 ## 构建
 
 使用具备 OpenWrt 构建依赖的 Linux、普通用户和区分大小写的文件系统。不要在主机上以 root 编译。macOS 上可在 Docker 的 Linux volume 内构建，不应直接使用大小写不敏感的目录作为构建区。
@@ -33,7 +35,7 @@ GOTOOLCHAIN=local make -j4 V=s CONFIG_GOLANG_BUILD_BOOTSTRAP= \
 
 RAX3000M/Me 使用独立干净构建目录，把目标参数换为 `cmcc-rax3000m`。准备脚本按 `config/source-lock.json` 抓取完整 SHA，验证子模块与已知补丁；不依赖旧版 Go/Python 覆盖或已有下载缓存。重复执行接受已知幂等补丁，遇到源版本、补丁锚点、未知修改或额外包提供者漂移时失败并保留原文件。`defconfig` 后逐项核对产品选择，阻止静默丢失组件或仅有 LuCI 页面而无后端。
 
-自定义 feed 锁定 `43dee65074096b99e30cb83f29c2d85289e0788c`，包含本轮安全和 LuCI 修复。该提交目前只在本地，尚未推送 GitHub；本机准备须显式指定含该提交的 Packages 仓库，不能把旧公开提交作为替代：
+自定义 feed 锁定 `43dee65074096b99e30cb83f29c2d85289e0788c`，包含本轮安全和 LuCI 修复。2026-11-03 交接已核实两仓 develop 在 GitHub；提交可获取不代表固件已验收、远端 CI 已运行或已发布。本机也可显式指定含该提交的 Packages 仓库：
 
 ```sh
 python3 scripts/boltwrt-prepare.py --local-feed /absolute/path/to/Packages
@@ -62,7 +64,7 @@ RAX 各变体需匹配实际存储、DDR 和设备布局，不能互换 bootload
 
 自有 APK 仓库、自动更新服务、发布资产完善、新设备和新 UI 不属于本次迁移范围。上游 APK 源不能提供 BoltWrt 自定义包，也不能保证匹配自编内核的模块；不得把上游更新能力视为定制固件已自动适配。
 
-2026-10-26 用户将后续运行验收缩减为云端虚拟环境中的启动、默认配置、APK/LuCI 和受控 3.1.2 升级；取消项及 ARM 仿真边界见 [云端验收交接](docs/4.0.0-cloud-validation.md)。该文档可供没有本机会话上下文的新云端会话直接执行；它不表示已完成云端测试或 RAX 板级启动。
+用户已将运行验收改为本机虚拟环境中的启动、默认配置、APK/LuCI 和受控 3.1.2 升级，并取消 RAX 板级、WAN、服务对端、真实流量和无线测试；取消项均记录为“用户缩减范围，未执行”。[原云端验收交接](docs/4.0.0-cloud-validation.md)保留方案与仿真边界，不表示实际使用云端或完成 RAX 板级启动。
 
 ## 来源与许可证
 
