@@ -237,6 +237,20 @@ class PrepareTests(unittest.TestCase):
         self.assertEqual(roots, {"feeds/BoltWrt/luci-app-passwall2": "BoltWrt",
                                  "feeds/packages/net/haproxy": "packages"})
 
+    def test_independent_hysteria_choice_registers_locked_custom_provider(self):
+        (self.root / "config/targets").mkdir(parents=True)
+        (self.root / "config/targets/x86-64.txt").write_text("")
+        (self.root / "config/common.txt").write_text(
+            "CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_Hysteria=y\nCONFIG_PACKAGE_hysteria=y\n")
+        indexes = {"packages": {"feeds/packages/net/hysteria": {"hysteria"}},
+                   "BoltWrt": {"feeds/BoltWrt/net/hysteria": {"hysteria"},
+                               "feeds/BoltWrt/luci-app-passwall2": {"luci-app-passwall2"}}}
+        winners, rejected = prepare.provider_plan(indexes)
+        roots = prepare.product_roots(indexes, winners, prepare.positive_package_choices(self.root))
+        self.assertEqual(roots["feeds/BoltWrt/net/hysteria"], "BoltWrt")
+        self.assertIn("feeds/packages/net/hysteria", rejected)
+        self.assertNotIn("feeds/packages/net/hysteria", roots)
+
     def test_legacy_registration_preserved_and_scoped_registration_repeats(self):
         source = self.root / "feeds/packages/unused"
         source.mkdir(parents=True)

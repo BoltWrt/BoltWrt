@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parent.parent
 TARGETS = ("x86-64", "cmcc-rax3000m")
 PASSWALL_CLIENT_BACKENDS = {
     "Haproxy": ("haproxy",),
+    "Hysteria": ("hysteria",),
     "Shadowsocks_Libev_Client": ("shadowsocks-libev-ss-local", "shadowsocks-libev-ss-redir"),
     "Shadowsocks_Rust_Client": ("shadowsocks-rust-sslocal",),
     "ShadowsocksR_Libev_Client": ("shadowsocksr-libev-ssr-local", "shadowsocksr-libev-ssr-redir"),

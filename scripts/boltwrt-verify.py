@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SERVICE_PACKAGES = {
     "DNS": ("dnsmasq-full", "smartdns", "luci-app-smartdns"),
     "DDNS": ("ddns-scripts", "ddns-scripts-aliyun", "ddns-scripts-services", "luci-app-ddns"),
-    "proxy": ("luci-app-passwall2", "haproxy", "sing-box", "xray-core", "geoview", "v2ray-plugin",
+    "proxy": ("luci-app-passwall2", "haproxy", "hysteria", "sing-box", "xray-core", "geoview", "v2ray-plugin",
               "v2ray-geoip", "v2ray-geosite", "shadowsocks-rust-sslocal",
               "shadowsocks-libev-ss-local", "shadowsocks-libev-ss-redir",
               "shadowsocksr-libev-ssr-local", "shadowsocksr-libev-ssr-redir", "simple-obfs-client"),
