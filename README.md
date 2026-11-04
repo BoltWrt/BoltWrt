@@ -4,7 +4,7 @@ BoltWrt 基于 OpenWrt 正式稳定版，迁回必要定制并维护平台配置
 
 firewall4/nftables、WireGuard 和双平台支持是已有能力。4.0.0 保留 DNS、DDNS、透明代理、SQM、UPnP、OpenVPN、ocserv、frpc 等功能，并通过新版本依赖解析和最终固件 manifest 核对实际前后端。
 
-PassWall2 的 Hysteria2 由已选 Sing-box 的 QUIC 模块提供：添加节点时选择 `Sing-Box`，协议选择 `Hysteria2`。无需另装独立 `hysteria` 核心；当前 RAX 配置、实际核心 build tags、APK 和生产 FIT 已核对，最终 x86 界面与生成配置检查仍在本轮验收中。
+PassWall2 在 x86-64 和 RAX3000M 两个平台均明确选择独立 `hysteria` 核心及其 `Hysteria2` 节点类型，同时保留 Sing-box。公共配置、后端检查及固件 manifest 检查要求实际包含 `hysteria` APK；原有 Sing-box QUIC 支持单独保留。该选择属于新构建输入，尚待更新固定 feed、正常构建及 APK／root／镜像验收，不能沿用旧 RAX 产物结论。
 
 ## 构建
 
