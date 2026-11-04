@@ -43,6 +43,13 @@ class ConfigTests(unittest.TestCase):
             self.verify(("Haproxy",))
         self.assertFalse((self.root / "logs/boltwrt/x86-64-config.json").exists())
 
+    def test_hysteria_include_rejects_singbox_without_independent_core(self):
+        with self.assertRaisesRegex(ValueError, "missing selected backend CONFIG_PACKAGE_hysteria=y"):
+            self.verify(("Hysteria", "SingBox"), ("sing-box",))
+
+    def test_hysteria_and_singbox_backends_coexist(self):
+        self.verify(("Hysteria", "SingBox"), ("hysteria", "sing-box"))
+
     def test_client_with_only_one_libev_binary_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "CONFIG_PACKAGE_shadowsocks-libev-ss-redir=y"):
             self.verify(("Shadowsocks_Libev_Client",), ("shadowsocks-libev-ss-local",))

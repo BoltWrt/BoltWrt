@@ -4,7 +4,7 @@ BoltWrt 基于 OpenWrt 正式稳定版，迁回必要定制并维护平台配置
 
 firewall4/nftables、WireGuard 和双平台支持是已有能力。4.0.0 保留 DNS、DDNS、透明代理、SQM、UPnP、OpenVPN、ocserv、frpc 等功能，并通过新版本依赖解析和最终固件 manifest 核对实际前后端。
 
-PassWall2 的 Hysteria2 由已选 Sing-box 的 QUIC 模块提供：添加节点时选择 `Sing-Box`，协议选择 `Hysteria2`。无需另装独立 `hysteria` 核心；当前 RAX 配置、实际核心 build tags、APK 和生产 FIT 已核对，最终 x86 界面与生成配置检查仍在本轮验收中。
+PassWall2 在 x86-64 和 RAX3000M 两个平台均明确选择独立 `hysteria` 核心及其 `Hysteria2` 节点类型，同时保留 Sing-box。公共配置、后端检查及固件 manifest 检查要求实际包含 `hysteria` APK；原有 Sing-box QUIC 支持单独保留。该选择属于新构建输入，已固定新 feed，尚待正常构建及 APK／root／镜像验收，不能沿用旧 RAX 产物结论。
 
 ## 构建
 
@@ -35,7 +35,7 @@ GOTOOLCHAIN=local make -j4 V=s CONFIG_GOLANG_BUILD_BOOTSTRAP= \
 
 RAX3000M/Me 使用独立干净构建目录，把目标参数换为 `cmcc-rax3000m`。准备脚本按 `config/source-lock.json` 抓取完整 SHA，验证子模块与已知补丁；不依赖旧版 Go/Python 覆盖或已有下载缓存。重复执行接受已知幂等补丁，遇到源版本、补丁锚点、未知修改或额外包提供者漂移时失败并保留原文件。`defconfig` 后逐项核对产品选择，阻止静默丢失组件或仅有 LuCI 页面而无后端。
 
-自定义 feed 锁定 `43dee65074096b99e30cb83f29c2d85289e0788c`，包含本轮安全和 LuCI 修复。2026-11-03 交接已核实两仓 develop 在 GitHub；提交可获取不代表固件已验收、远端 CI 已运行或已发布。本机也可显式指定含该提交的 Packages 仓库：
+自定义 feed 锁定本地已合并的 `fbb14623f8cc66f4dcc7d60d2f142c254919d7de`，包含独立 Hysteria 2.13.0-r1 与 PassWall2 26.4.20-r4（对应新版核心的 fastOpen／PMTU 配置修复）。该新提交尚未推送，当前准备必须显式指定含该提交的本地 Packages 仓库；2026-11-03 已推送的 `43dee65074096b99e30cb83f29c2d85289e0788c` 只是历史输入，不能据此假定 GitHub 可获取新提交。实际新固件、远端 CI 和发布均未完成：
 
 ```sh
 python3 scripts/boltwrt-prepare.py --local-feed /absolute/path/to/Packages

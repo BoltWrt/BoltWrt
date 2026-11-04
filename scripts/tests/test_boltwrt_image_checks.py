@@ -161,7 +161,7 @@ class DiskChecks(unittest.TestCase):
 # chains, not generated from the verifier's required-package constants.
 BASE_PACKAGES = '''apk-mbedtls boltwrt-defaults dnsmasq-full smartdns luci-app-smartdns
 ddns-scripts ddns-scripts-aliyun ddns-scripts-services luci-app-ddns
-luci-app-passwall2 haproxy sing-box xray-core geoview v2ray-plugin v2ray-geoip v2ray-geosite
+luci-app-passwall2 haproxy hysteria sing-box xray-core geoview v2ray-plugin v2ray-geoip v2ray-geosite
 shadowsocks-rust-sslocal shadowsocks-libev-ss-local shadowsocks-libev-ss-redir
 shadowsocksr-libev-ssr-local shadowsocksr-libev-ssr-redir simple-obfs-client
 sqm-scripts luci-app-sqm kmod-sched-cake kmod-ifb miniupnpd-nftables luci-app-upnp
@@ -183,7 +183,7 @@ class ManifestChecks(unittest.TestCase):
         verify.check_manifest(self.packages(True), 'x86-64')
 
     def test_missing_chosen_backends_and_web_plugins_rejected(self):
-        required = ('haproxy', 'ddns-scripts-services', 'nginx-mod-ubus', 'nginx-ssl-util', 'uwsgi', 'uwsgi-cgi-plugin',
+        required = ('hysteria', 'haproxy', 'ddns-scripts-services', 'nginx-mod-ubus', 'nginx-ssl-util', 'uwsgi', 'uwsgi-cgi-plugin',
                     'uwsgi-luci-support', 'uwsgi-syslog-plugin', 'xray-core', 'geoview',
                     'v2ray-plugin', 'v2ray-geoip', 'v2ray-geosite', 'shadowsocks-rust-sslocal',
                     'shadowsocks-libev-ss-local', 'shadowsocks-libev-ss-redir',
@@ -195,6 +195,15 @@ class ManifestChecks(unittest.TestCase):
                 del packages[name]
                 with self.assertRaisesRegex(ValueError, name):
                     verify.check_manifest(packages, 'cmcc-rax3000m')
+
+    def test_independent_hysteria_required_on_both_platforms(self):
+        for target in ('x86-64', 'cmcc-rax3000m'):
+            with self.subTest(target=target):
+                packages = self.packages(target == 'x86-64')
+                del packages['hysteria']
+                self.assertIn('sing-box', packages)
+                with self.assertRaisesRegex(ValueError, 'hysteria'):
+                    verify.check_manifest(packages, target)
 
     def test_nftables_alternative_does_not_replace_json_backend(self):
         packages = self.packages()
