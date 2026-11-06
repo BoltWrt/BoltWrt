@@ -4,6 +4,7 @@ import argparse
 import gzip
 import hashlib
 import json
+import re
 import struct
 import subprocess
 import sys
@@ -43,6 +44,42 @@ def require(condition, message):
 def digest(path):
     with path.open("rb") as handle:
         return hashlib.file_digest(handle, "sha256").hexdigest()
+
+
+def product_version():
+    version = json.loads((ROOT / "config/source-lock.json").read_text())["version"]
+    number = r"(?:0|[1-9][0-9]*)"
+    require(isinstance(version, str) and
+            re.fullmatch(rf"{number}\.{number}\.{number}(?:-rc[1-9][0-9]*)?", version),
+            "invalid locked product version")
+    definitions = [line for line in (ROOT / "config/version.txt").read_text().splitlines()
+                   if re.match(r"\s*CONFIG_VERSION_NUMBER\b", line)]
+    require(definitions == [f'CONFIG_VERSION_NUMBER="{version}"'],
+            "product version fragment/source-lock mismatch or duplicate")
+    return version
+
+
+def image_prefix(version, target):
+    platform = "x86-64" if target == "x86-64" else "mediatek-filogic"
+    return f"boltwrt-{version}-{platform}-"
+
+
+def image_metadata(directory, target, version):
+    prefix = image_prefix(version, target)
+    manifests = list(directory.glob(prefix + "*.manifest"))
+    require(len(manifests) == 1, f"expected one current image manifest, found {len(manifests)}")
+    profiles = json.loads((directory / "profiles.json").read_text())
+    platform = "x86/64" if target == "x86-64" else "mediatek/filogic"
+    require(profiles["version_number"] == version and profiles["target"] == platform,
+            "image profile version/target mismatch")
+    require(profiles["linux_kernel"]["version"] == "6.12.112", "profile kernel mismatch")
+    for profile in profiles["profiles"].values():
+        profile_prefix = profile["image_prefix"]
+        require(profile_prefix.startswith(prefix), "profile artifact product version/target mismatch")
+        for item in profile["images"]:
+            require(item["name"].startswith(profile_prefix + "-"),
+                    "profile artifact product version/target mismatch")
+    return manifests[0], profiles
 
 
 def check_manifest(packages, target):
@@ -195,8 +232,8 @@ def fit_file_span(path):
             "file_sector_bytes": ((file_bytes + 511) // 512) * 512}
 
 
-def check_rax_fit_budget(directory):
-    prefix = "boltwrt-4.0.0-mediatek-filogic-cmcc_rax3000m-"
+def check_rax_fit_budget(directory, version):
+    prefix = image_prefix(version, "cmcc-rax3000m") + "cmcc_rax3000m-"
     partitions = check_rax_gpt(directory / (prefix + "emmc-gpt.bin"))
     production = fit_file_span(directory / (prefix + "squashfs-sysupgrade.itb"))
     recovery = fit_file_span(directory / (prefix + "initramfs-recovery.itb"))
@@ -229,32 +266,29 @@ def main():
     parser.add_argument("--rax-budget-only", action="store_true",
                         help="check only RAX GPT/FIT budgets; no config/manifest/profile checks")
     args = parser.parse_args()
+    version = product_version()
     if args.rax_budget_only:
         require(args.target == "cmcc-rax3000m", "--rax-budget-only requires cmcc-rax3000m")
         directory = args.directory or ROOT / "bin/targets/mediatek/filogic"
-        print(json.dumps(check_rax_fit_budget(directory), indent=2))
+        print(json.dumps(check_rax_fit_budget(directory, version), indent=2))
         return
     subprocess.run([sys.executable, str(ROOT / "scripts/boltwrt-config.py"), args.target,
                     "--check-only"], check=True)
     target = "x86/64" if args.target == "x86-64" else "mediatek/filogic"
     directory = args.directory or ROOT / "bin/targets" / target
-    manifests = list(directory.glob("boltwrt-4.0.0-*.manifest"))
-    require(len(manifests) == 1, f"expected one current image manifest, found {len(manifests)}")
+    manifest, profiles = image_metadata(directory, args.target, version)
     packages = {}
-    for line in manifests[0].read_text().splitlines():
-        name, separator, version = line.partition(" - ")
-        require(bool(separator and name and version), f"invalid manifest line: {line}")
+    for line in manifest.read_text().splitlines():
+        name, separator, package_version = line.partition(" - ")
+        require(bool(separator and name and package_version), f"invalid manifest line: {line}")
         require(name not in packages, f"duplicate manifest package: {name}")
-        packages[name] = version
+        packages[name] = package_version
     check_manifest(packages, args.target)
     # The locked sch_cake module provides both cake and cake_mq. A package
     # manifest cannot establish which qdisc is active; that needs runtime checks.
-    profiles = json.loads((directory / "profiles.json").read_text())
-    require(profiles["version_number"] == "4.0.0" and profiles["target"] == target,
-            "image profile version/target mismatch")
-    require(profiles["linux_kernel"]["version"] == "6.12.112", "profile kernel mismatch")
-    record = {"target": args.target, "manifest": manifests[0].name,
-              "manifest_sha256": digest(manifests[0]), "packages": packages, "images": {}}
+    record = {"target": args.target, "version": version, "manifest": manifest.name,
+              "source_lock_sha256": digest(ROOT / "config/source-lock.json"),
+              "manifest_sha256": digest(manifest), "packages": packages, "images": {}}
     for profile in profiles["profiles"].values():
         for item in profile["images"]:
             path = directory / item["name"]
@@ -265,14 +299,14 @@ def main():
     if args.target == "x86-64":
         for suffix, efi in (("generic-squashfs-combined.img.gz", False),
                             ("generic-squashfs-combined-efi.img.gz", True)):
-            path = directory / ("boltwrt-4.0.0-x86-64-" + suffix)
+            path = directory / (image_prefix(version, args.target) + suffix)
             require(path.name in record["images"], f"missing x86 image: {path.name}")
             record["images"][path.name].update(check_disk(path, efi))
         temporary_root = ROOT / "tmp"
         temporary_root.mkdir(exist_ok=True)
         with tempfile.TemporaryDirectory(prefix="boltwrt-vmdk-", dir=temporary_root) as temporary:
             for suffix, efi in (("combined.vmdk", False), ("combined-efi.vmdk", True)):
-                path = directory / ("boltwrt-4.0.0-x86-64-generic-squashfs-" + suffix)
+                path = directory / (image_prefix(version, args.target) + "generic-squashfs-" + suffix)
                 require(path.is_file() and path.name in record["images"], f"missing VMDK: {path.name}")
                 info = json.loads(subprocess.check_output(["qemu-img", "info", "--output=json", str(path)]))
                 require(info["format"] == "vmdk" and info["virtual-size"] >= 416 * 1024 * 1024,
@@ -293,10 +327,10 @@ def main():
         require(any(name in packages for name in ("wpad-basic-mbedtls", "wpad-mbedtls",
                                                   "wpad-basic-openssl", "wpad-openssl")),
                 "RAX Wi-Fi authenticator missing")
-        prefix = "boltwrt-4.0.0-mediatek-filogic-cmcc_rax3000m-"
+        prefix = image_prefix(version, args.target) + "cmcc_rax3000m-"
         image = directory / (prefix + "squashfs-sysupgrade.itb")
         require(image.is_file(), "missing RAX sysupgrade FIT")
-        record["rax_fit_budget"] = check_rax_fit_budget(directory)
+        record["rax_fit_budget"] = check_rax_fit_budget(directory, version)
         for medium in ("emmc", "nand"):
             for ddr in ("ddr3", "ddr4"):
                 for kind in ("preloader.bin", "bl31-uboot.fip"):
