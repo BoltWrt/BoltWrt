@@ -1,5 +1,5 @@
 {
-  "version": "4.0.0-rc1",
+  "version": "4.0.0",
   "upstream": {
     "url": "https://github.com/openwrt/openwrt.git",
     "tag": "v25.12.6",
