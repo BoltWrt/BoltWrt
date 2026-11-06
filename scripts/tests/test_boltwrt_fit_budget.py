@@ -62,18 +62,26 @@ class FitBudgetTests(unittest.TestCase):
         fit(self.recovery, 12 * MIB)
 
     def test_small_recovery_keeps_deployed_layout_and_reserve(self):
-        result = verify.check_rax_fit_budget(self.root)
+        result = verify.check_rax_fit_budget(self.root, '4.0.0')
         self.assertEqual(result['emmc_partitions']['recovery']['bytes'], 32 * MIB)
         self.assertEqual(result['emmc_partitions']['production']['bytes'], 128 * MIB)
         self.assertEqual(result['nand_payload_lower_bound_bytes'], 78 * MIB)
         self.assertIn('bad blocks', result['scope'])
+
+    def test_rc_names_keep_identical_budget_and_reject_stable_names(self):
+        expected = verify.check_rax_fit_budget(self.root, '4.0.0')
+        for path in (self.gpt, self.production, self.recovery):
+            path.rename(path.with_name(path.name.replace('4.0.0-', '4.0.0-rc1-', 1)))
+        self.assertEqual(verify.check_rax_fit_budget(self.root, '4.0.0-rc1'), expected)
+        with self.assertRaises(FileNotFoundError):
+            verify.check_rax_fit_budget(self.root, '4.0.0')
 
     def test_current_build_sized_recovery_is_rejected_for_both_media(self):
         # Observed actual artifact sizes, not values computed by the checker.
         fit(self.production, 67633420)
         fit(self.recovery, 50659328)
         with self.assertRaises(ValueError) as error:
-            verify.check_rax_fit_budget(self.root)
+            verify.check_rax_fit_budget(self.root, '4.0.0')
         self.assertIn('eMMC recovery', str(error.exception))
         self.assertIn('NAND production+recovery+two 1MiB env', str(error.exception))
         self.assertIn('120389900', str(error.exception))
@@ -81,18 +89,18 @@ class FitBudgetTests(unittest.TestCase):
     def test_file_padding_cannot_evade_recovery_capacity(self):
         fit(self.recovery, 12 * MIB, padded=32 * MIB + 1)
         with self.assertRaisesRegex(ValueError, 'eMMC recovery'):
-            verify.check_rax_fit_budget(self.root)
+            verify.check_rax_fit_budget(self.root, '4.0.0')
 
     def test_two_env_volumes_count_towards_strict_conservative_margin(self):
         fit(self.production, 82 * MIB)
         fit(self.recovery, 20 * MIB)
         with self.assertRaisesRegex(ValueError, 'NAND coexistence.*104 MiB'):
-            verify.check_rax_fit_budget(self.root)
+            verify.check_rax_fit_budget(self.root, '4.0.0')
 
     def test_production_uses_actual_gpt_capacity(self):
         gpt(self.gpt, production_last=131072 + 48 * 2048 - 1)
         with self.assertRaisesRegex(ValueError, 'eMMC production'):
-            verify.check_rax_fit_budget(self.root)
+            verify.check_rax_fit_budget(self.root, '4.0.0')
 
     def test_gpt_header_corruption(self):
         data = bytearray(self.gpt.read_bytes())
@@ -127,7 +135,7 @@ class FitBudgetTests(unittest.TestCase):
     def test_truncated_fit_is_rejected_before_capacity_checks(self):
         self.recovery.write_bytes(self.recovery.read_bytes()[:4096])
         with self.assertRaisesRegex(ValueError, 'invalid/truncated FIT size'):
-            verify.check_rax_fit_budget(self.root)
+            verify.check_rax_fit_budget(self.root, '4.0.0')
 
 
 if __name__ == '__main__':
