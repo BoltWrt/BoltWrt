@@ -1,76 +1,136 @@
 # BoltWrt
 
-BoltWrt 基于 OpenWrt 正式稳定版，迁回必要定制并维护平台配置、构建流程和升级兼容性。4.0.0 的基线是 OpenWrt **v25.12.6**，固定 commit `64900e756efa667774214f9c6b17c113222e01f7`，Linux **6.12.112**。这是从 24.10 / Linux 6.6 到 25.12 / Linux 6.12 的基础平台迁移，包管理器采用 APK，Wi-Fi 使用上游 ucode 实现。
+BoltWrt 是基于 OpenWrt 的路由器系统，提供中文管理界面，并集成 DNS、代理、VPN 等常用网络功能。通过浏览器即可配置上网、查看设备状态和管理网络服务。
 
-firewall4/nftables、WireGuard 和双平台支持是已有能力。4.0.0 保留 DNS、DDNS、透明代理、SQM、UPnP、OpenVPN、ocserv、frpc 等功能，并通过新版本依赖解析和最终固件 manifest 核对实际前后端。
+4.0.0 基于 OpenWrt 25.12.6，采用 Linux 6.12 内核和 APK 软件包管理器。
 
-PassWall2 在 x86-64 和 RAX3000M 两个平台均明确选择独立 `hysteria` 核心及其 `Hysteria2` 节点类型，同时保留 Sing-box。公共配置、后端检查及固件 manifest 检查要求实际包含 `hysteria` APK；原有 Sing-box QUIC 支持单独保留。该选择属于新构建输入，已固定新 feed，尚待正常构建及 APK／root／镜像验收，不能沿用旧 RAX 产物结论。
+## 获取固件
 
-## 构建
+固件和版本说明通过 GitHub Releases 提供。下载时选择与设备匹配的平台，并核对版本号。 [固件发布页](https://github.com/BoltWrt/BoltWrt/releases)
 
-使用具备 OpenWrt 构建依赖的 Linux、普通用户和区分大小写的文件系统。不要在主机上以 root 编译。macOS 上可在 Docker 的 Linux volume 内构建，不应直接使用大小写不敏感的目录作为构建区。
+解开下载的 `.tar.gz` 包后，根据平台和启动方式选择镜像。
 
-```sh
-python3 scripts/boltwrt-prepare.py
-python3 scripts/boltwrt-config.py x86-64
-DOWNLOAD_MIRROR=https://sources.cdn.openwrt.org make download -j6
-make -j4 V=s
-python3 scripts/boltwrt-verify.py x86-64
-```
-
-源码归档优先使用 OpenWrt 官方缓存；缓存未命中时，下载器继续使用各 recipe 的源地址。全部归档仍须符合固定校验值。
-
-顶层 `make download` 不覆盖所有 host 构建依赖；实际编译仍可能补取固定 recipe 的输入，不能据该命令返回 0 推定离线构建已具备全部源码。
-
-在 ARM64 Linux 构建宿主上，上游 Go 1.4 自举起点不可用。可使用宿主已有、满足 [Go 1.26.10 自举要求](https://github.com/golang/go/blob/go1.26.10/src/make.bash)的 Go（至少 1.24.6），在每次编译命令中同时取消内部 bootstrap 并指定其根目录。准备脚本在固定 feed 上精确应用 Go 1.26.10 安全补丁版及官方源码散列，修复 [GO-2026-6809](https://pkg.go.dev/vuln/GO-2026-6809)，不滚动升级 feed。此前产物实际使用 Go 1.26.9，更新后的 Go 程序仍须重新构建验收；镜像内 Go 1.26.8 仅为 bootstrap：
-
-```sh
-go_root="$(GOTOOLCHAIN=local go env GOROOT)" || exit 1
-GOTOOLCHAIN=local "$go_root/bin/go" version
-GOTOOLCHAIN=local make -j4 V=s CONFIG_GOLANG_BUILD_BOOTSTRAP= \
-  CONFIG_GOLANG_EXTERNAL_BOOTSTRAP_ROOT="$go_root"
-```
-
-保存外部 bootstrap 版本、构建环境身份及有效命令参数；这些覆盖不包含在 `.config` SHA 中。Ubuntu amd64 CI 保持上游原生自举链。
-
-RAX3000M/Me 使用独立干净构建目录，把目标参数换为 `cmcc-rax3000m`。准备脚本按 `config/source-lock.json` 抓取完整 SHA，验证子模块与已知补丁；不依赖旧版 Go/Python 覆盖或已有下载缓存。重复执行接受已知幂等补丁，遇到源版本、补丁锚点、未知修改或额外包提供者漂移时失败并保留原文件。`defconfig` 后逐项核对产品选择，阻止静默丢失组件或仅有 LuCI 页面而无后端。
-
-自定义 feed 锁定 BoltWrt Packages `main` 的提交 `45ad2e027ad925eb084231421bb6a7576aa099e3`，包含独立 Hysteria 2.13.0-r1 与 PassWall2 26.4.20-r4（对应新版核心的 fastOpen／PMTU 配置修复）。准备脚本默认从 GitHub 抓取该提交，也可用下列命令指定含该提交的本地 Packages 仓库。
-
-```sh
-python3 scripts/boltwrt-prepare.py --local-feed /absolute/path/to/Packages
-```
-
-该入口仅替换抓取位置，仍核对同一个 commit 和全部子模块 SHA。官方五项 feeds、工具链版本及自定义 feed/gitlink 固定值均见 `config/source-lock.json`。准备与配置证据写入忽略目录 `logs/`；实际固件在 `bin/targets/x86/64/` 或 `bin/targets/mediatek/filogic/`。
-
-本轮 Go、ChinaDNS/wolfSSL、SSR、v2ray-plugin 及 PassWall2 浏览器修复的来源和验收状态见 [安全与浏览器复核](docs/4.0.0-security-browser.md)。源码提交、目标编译和运行证据分别记录，旧镜像不追认为修复后的产物。
-
-## 平台和默认配置
-
-| 平台 | 镜像与差异 |
+| 平台 | 镜像文件名结尾 |
 | --- | --- |
-| x86-64 | BIOS / UEFI；SquashFS IMG.gz 与 VMDK；32 MiB boot、384 MiB rootfs；Zabbix 及额外 DDNS providers |
-| RAX3000M/Me | Filogic；NAND / eMMC；DDR3 / DDR4 各自的启动文件；initramfs recovery FIT 与 sysupgrade FIT；USB 存储及 Samba |
+| x86-64，BIOS 启动 | `-combined.img.gz` 或 `-combined.vmdk` |
+| x86-64，UEFI 启动 | `-combined-efi.img.gz` 或 `-combined-efi.vmdk` |
+| CMCC RAX3000M / RAX3000Me | `-squashfs-sysupgrade.itb` 为系统升级镜像，`-recovery.itb` 为恢复镜像 |
 
-RAX 各变体需匹配实际存储、DDR 和设备布局，不能互换 bootloader。共同 sysupgrade 镜像须小于保守的 104 MiB NAND 包体预算；这不替代坏块、UBI 余量及刷写实机验证。硬件映射和阈值依据见 [平台迁移说明](docs/4.0.0-platform.md)。
+## 开始使用
 
-新装 LAN 为 `10.126.0.1/18`，默认 hostname 为 BoltWrt，使用预设 NTP；Web 由 nginx HTTPS、uwsgi、LuCI 和 Argon 提供。保留升级中的用户网络、主题与现有证书，不启用第二套 uhttpd 服务。
+### x86-64 设备与虚拟机
 
-## 验证与升级边界
+实体机使用 IMG.gz 整盘镜像。写入镜像会覆盖目标磁盘，请先备份盘内数据。写盘工具如果要求 IMG 格式，可先解压镜像再写入。
 
-4.0.0 正在开发与验收。容器配置语义测试、源码审查、编译、镜像检查和实机运行是不同证据。编译或静态检查通过不能证明 DHCP、PPPoE、IPv6 PD、DNS、代理、SQM、VPN、无线或保留配置升级可用。
+以 VMware 虚拟机为例，可按以下步骤安装。
 
-本次升级验收范围仅为 **3.1.2 → 4.0.0**。旧 opkg/APK 状态、旧包二进制、内核模块及整个 overlay 不应迁移；需要保留的 UCI、自定义脚本、证书及用户数据必须按实际备份清单核对。阿里云 DDNS 的旧域名格式有专门迁移，见平台说明。2.x、3.0.x 等版本直升兼容性另行验证。
+1. 创建 64 位虚拟机，使用固件包中的 VMDK 磁盘，并选择对应的 BIOS 或 UEFI 启动方式。
+2. 为 LAN 和 WAN 分别配置网卡，将管理电脑和上级网络接到对应的虚拟网络。
+3. 启动后通过 LAN 登录管理界面，在「网络 → 接口」检查 LAN、WAN 与网卡的对应关系。
 
-自有 APK 仓库、自动更新服务、发布资产完善、新设备和新 UI 不属于本次迁移范围。上游 APK 源不能提供 BoltWrt 自定义包，也不能保证匹配自编内核的模块；不得把上游更新能力视为定制固件已自动适配。
+### RAX3000M / RAX3000Me
 
-用户已将运行验收改为本机虚拟环境中的启动、默认配置、APK/LuCI 和受控 3.1.2 升级，并取消 RAX 板级、WAN、服务对端、真实流量和无线测试；取消项均记录为“用户缩减范围，未执行”。[原云端验收交接](docs/4.0.0-cloud-validation.md)保留方案与仿真边界，不表示实际使用云端或完成 RAX 板级启动。
+首次安装前，请确认设备的硬件版本，备份原厂固件和设备数据。引导文件需要同时匹配闪存类型（NAND 或 eMMC）和内存类型（DDR3 或 DDR4）。具体刷写步骤和恢复方法见对应设备的安装指南。 [OpenWrt 设备指南](https://openwrt.org/toh/cmcc/rax3000m)
 
-## 来源与许可证
+### 登录与网络设置
+
+全新安装的默认管理地址为 `https://10.126.0.1`，账号为 `root`，密码为空。保留配置升级后，沿用原来的管理地址和密码。
+
+1. 将电脑连接到 LAN，打开管理地址。首次访问可能出现证书提示，确认连接的是自己的设备、地址无误后继续登录。
+2. 在「系统 → 管理权 → 路由器密码」设置管理密码。
+3. 将光猫或上级路由器连接到 WAN。在「网络 → 接口」编辑 `wan`，按接入方式选择「DHCP 客户端」或「PPPoE」。使用宽带拨号时，填写运营商提供的账号和密码，再点「保存并应用」。
+4. RAX3000M / Me 的 Wi-Fi 可在「网络 → 无线」中设置。配置网络名称和密码后启用无线网络。
+
+系统版本、运行状态和网络信息可在「状态 → 概览」查看。
+
+## 主要组件
+
+BoltWrt 集成了常用的 DNS、代理、流量管理和远程访问组件，可在管理界面中按需配置。
+
+| 组件 | 说明 |
+| --- | --- |
+| SmartDNS | 支持多上游 DNS 查询和缓存，可自定义域名解析策略。 |
+| 动态 DNS（DDNS） | 公网地址变化后，自动更新域名解析记录。 |
+| PassWall 2 | 提供代理连接与分流，集成独立 Hysteria2、Sing-box 等核心。 |
+| SQM | 管理上下行带宽，缓解网络拥塞造成的延迟。 |
+| UPnP | 允许局域网设备自动申请端口映射。 |
+| WireGuard | 建立加密隧道，用于远程接入和网络互联。 |
+| OpenVPN | 支持 OpenVPN 客户端和服务端。 |
+| ocserv | 提供兼容 Cisco AnyConnect 的 VPN 服务端。 |
+| frp 客户端 | 连接 frp 服务端，实现内网穿透和远程访问。 |
+
+代理节点和订阅在「服务 → PassWall 2」中设置。在「组件更新」页面点击「检查更新」，可查看代理组件是否有新版本。节点或订阅需要自行准备，相关服务的费用由提供方决定。
+
+软件包在「系统 → 软件包」中管理。安装时应选择适配当前固件和设备平台的 APK。OpenWrt 软件源不提供 BoltWrt 的定制组件；内核模块需要与当前固件配套，仅内核版本号相同仍可能无法安装。
+
+## 备份与升级
+
+以下介绍 x86-64、CMCC RAX3000M 和 RAX3000Me 的备份、升级与恢复，升级步骤以 3.1.2 升级到 4.0.0 为例。其他旧版本请先查阅对应版本的升级说明。
+
+### 备份
+
+在「系统 → 备份与更新」点击「生成备份」，将配置保存到电脑。自定义脚本、证书和用户数据也应单独备份。备份中可能包含密码和密钥，请妥善保管。
+
+- **x86-64**：虚拟机可在关机后保存快照；磁盘上另有数据或自行调整过分区的设备，建议备份整盘。
+- **RAX3000M / RAX3000Me**：请保留首次刷机时导出的原厂分区备份，尤其是保存无线校准数据和 MAC 地址的 `factory` 分区。网页生成的配置备份不包含这些分区。
+
+### 升级
+
+从 3.1.2 升级到 4.0.0 前，使用 Bootstrap 主题的设备请先切换到 Argon。OpenVPN 的静态密钥配置需先迁移到 TLS 证书模式。旧版 IPK 软件包不能用于 4.0.0，额外安装的软件需要重新准备适配的 APK。
+
+根据设备选择升级镜像。x86 应保持原来的 BIOS 或 UEFI 启动方式；RAX 应保持现有的引导和分区布局。
+
+| 设备 | 升级镜像文件名结尾 |
+| --- | --- |
+| x86-64，BIOS 启动 | `-combined.img.gz` |
+| x86-64，UEFI 启动 | `-combined-efi.img.gz` |
+| CMCC RAX3000M / RAX3000Me，NAND 或 eMMC | `-squashfs-sysupgrade.itb` |
+
+1. 在「系统 → 备份与更新」点击「刷写固件…」，上传对应的升级镜像。
+2. 校验通过后，如需沿用原来的配置，勾选「保留设置并继续使用当前配置」；如需重新配置，取消勾选。
+3. 点击「继续」。刷写期间保持供电，等待设备自动重启。
+4. 保留配置时，使用原来的管理地址和密码登录；未保留配置时，使用默认管理地址登录并重新设置。检查系统版本、网络连接和已启用的服务，再按需安装额外的软件包。
+
+### 恢复
+
+恢复配置时，在「系统 → 备份与更新」点击「上传备份…」，选择同一设备、相同固件版本导出的备份，核对文件清单后点击「继续」。重启后使用备份中保存的 LAN 地址登录。
+
+RAX3000M / RAX3000Me 的 `-recovery.itb` 用于启动恢复环境，不能代替普通升级镜像。若设备无法正常启动，请按 [OpenWrt 设备指南](https://openwrt.org/toh/cmcc/rax3000m) 中与自身闪存、内存类型及引导方式相符的步骤恢复。
+
+## 常见问题
+
+- **无法打开管理页面**
+
+  检查电脑是否连接到 LAN，管理地址是否正确。全新安装后，若电脑未能自动获取地址，可临时设置 IP 为 `10.126.0.2`、子网掩码为 `255.255.192.0`，再访问默认地址。连接恢复后，将电脑改回自动获取地址。
+
+- **可以登录管理界面，但无法上网**
+
+  检查 WAN 网线和「网络 → 接口」中的连接状态。PPPoE 拨号失败时，核对运营商提供的账号和密码。
+
+- **刷写时提示「固件文件校验失败」或无法保留设置**
+
+  取消刷写，检查固件的平台、版本和镜像类型，重新选择匹配的文件。
+
+- **升级后阿里云 DDNS 更新失败**
+
+  在「服务 → 动态 DNS」检查账号权限和域名格式。子域填写 `home@example.com`，根域填写 `@example.com`。
+
+- **需要恢复默认配置**
+
+  先保存配置备份，再到「系统 → 备份与更新」中的「重置为默认」点击「执行重置」。设备会清除现有设置并重启。
+
+其他问题可通过 GitHub Issues 反馈。请提供设备型号、硬件版本、固件版本和错误信息，必要时附上「状态 → 系统日志」中的相关内容。提交前请移除密码、密钥和订阅地址。 [反馈问题](https://github.com/BoltWrt/BoltWrt/issues)
+
+## 致谢
+
+感谢 OpenWrt 社区、相关开源项目的贡献者，以及镜像服务的维护者。
 
 - [OpenWrt](https://github.com/openwrt/openwrt)
 - [BoltWrt Packages](https://github.com/BoltWrt/Packages)
 - [Argon](https://github.com/jerrykuku/luci-theme-argon)
 - [SmartDNS](https://github.com/pymumu/smartdns)
+- [中国科学技术大学开源软件镜像站](https://mirrors.ustc.edu.cn/help/openwrt.html)
 
-遵循 [GPL-2.0](COPYING) 及各组件各自的许可证。
+## 许可证
+
+本项目按 GPL-2.0-only 发布，各组件遵循各自的许可证。 [版权与许可声明](COPYING) · [GPL-2.0 正文](LICENSES/GPL-2.0)
