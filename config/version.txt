@@ -2,9 +2,9 @@
 CONFIG_IMAGEOPT=y
 CONFIG_VERSIONOPT=y
 CONFIG_VERSION_DIST="BoltWrt"
-CONFIG_VERSION_NUMBER="4.0.0-rc1"
+CONFIG_VERSION_NUMBER="4.0.0"
 CONFIG_VERSION_CODE="openwrt-25.12.6"
-CONFIG_VERSION_REPO="https://mirrors.tuna.tsinghua.edu.cn/openwrt/releases/25.12.6"
+CONFIG_VERSION_REPO="https://mirrors.ustc.edu.cn/openwrt/releases/25.12.6"
 CONFIG_VERSION_MANUFACTURER="BoltWrt"
 CONFIG_VERSION_MANUFACTURER_URL="https://github.com/BoltWrt/BoltWrt"
 CONFIG_VERSION_HOME_URL="https://github.com/BoltWrt/BoltWrt"
