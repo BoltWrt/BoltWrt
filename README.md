@@ -35,7 +35,7 @@ GOTOOLCHAIN=local make -j4 V=s CONFIG_GOLANG_BUILD_BOOTSTRAP= \
 
 RAX3000M/Me 使用独立干净构建目录，把目标参数换为 `cmcc-rax3000m`。准备脚本按 `config/source-lock.json` 抓取完整 SHA，验证子模块与已知补丁；不依赖旧版 Go/Python 覆盖或已有下载缓存。重复执行接受已知幂等补丁，遇到源版本、补丁锚点、未知修改或额外包提供者漂移时失败并保留原文件。`defconfig` 后逐项核对产品选择，阻止静默丢失组件或仅有 LuCI 页面而无后端。
 
-自定义 feed 锁定本地已合并的 `fbb14623f8cc66f4dcc7d60d2f142c254919d7de`，包含独立 Hysteria 2.13.0-r1 与 PassWall2 26.4.20-r4（对应新版核心的 fastOpen／PMTU 配置修复）。该新提交尚未推送，当前准备必须显式指定含该提交的本地 Packages 仓库；2026-11-03 已推送的 `43dee65074096b99e30cb83f29c2d85289e0788c` 只是历史输入，不能据此假定 GitHub 可获取新提交。实际新固件、远端 CI 和发布均未完成：
+自定义 feed 锁定 BoltWrt Packages `main` 的提交 `45ad2e027ad925eb084231421bb6a7576aa099e3`，包含独立 Hysteria 2.13.0-r1 与 PassWall2 26.4.20-r4（对应新版核心的 fastOpen／PMTU 配置修复）。准备脚本默认从 GitHub 抓取该提交，也可用下列命令指定含该提交的本地 Packages 仓库。
 
 ```sh
 python3 scripts/boltwrt-prepare.py --local-feed /absolute/path/to/Packages
