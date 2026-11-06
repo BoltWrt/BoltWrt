@@ -1,0 +1,25 @@
+#!/bin/sh
+# Standard 3.1.2/current sysupgrade backups always restore this marker, even
+# when no services were disabled. Let 10_disable_services restore that state.
+if [ -e /etc/uci-defaults/10_disable_services ] || [ -L /etc/uci-defaults/10_disable_services ]; then
+	if [ ! -f /etc/uci-defaults/10_disable_services ] || [ -L /etc/uci-defaults/10_disable_services ]; then
+		echo 'boltwrt-defaults: invalid restored service-state marker' >&2
+		exit 1
+	fi
+	exit 0
+fi
+
+# Minimal recovery may omit haproxy. PassWall manages its own binary instances;
+# a fresh install must not start the package's independent example listeners.
+[ -e /etc/init.d/haproxy ] || [ -L /etc/init.d/haproxy ] || exit 0
+if [ ! -x /etc/init.d/haproxy ] || ! /etc/init.d/haproxy disable; then
+	echo 'boltwrt-defaults: failed to disable the standalone haproxy service' >&2
+	exit 1
+fi
+for boltwrt_haproxy_link in /etc/rc.d/S??haproxy /etc/rc.d/K??haproxy; do
+	if [ -e "$boltwrt_haproxy_link" ] || [ -L "$boltwrt_haproxy_link" ]; then
+		echo 'boltwrt-defaults: standalone haproxy service links remain' >&2
+		exit 1
+	fi
+done
+exit 0

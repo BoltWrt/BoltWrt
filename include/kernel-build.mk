@@ -30,7 +30,12 @@ endef
 
 define Kernel/CompileImage
 	$(call Kernel/CompileImage/Default)
-	$(call Kernel/CompileImage/Initramfs)
+	$(if $(CONFIG_TARGET_mediatek_filogic_DEVICE_cmcc_rax3000m), \
+		$(STAGING_DIR_HOST)/bin/python3 -B $(SCRIPT_DIR)/boltwrt-recovery.py check-root \
+			--config $(TOPDIR)/.config --packages $(TOPDIR)/config/recovery/cmcc-rax3000m.txt \
+			--root $(TARGET_DIR).recovery --manifest $(TARGET_DIR).recovery.manifest \
+			--output $(TARGET_DIR).recovery.json)
+	$(call Kernel/CompileImage/Initramfs,$(if $(CONFIG_TARGET_mediatek_filogic_DEVICE_cmcc_rax3000m),$(TARGET_DIR).recovery))
 endef
 
 define Kernel/Clean

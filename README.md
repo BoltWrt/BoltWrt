@@ -1,82 +1,76 @@
 # BoltWrt
 
+BoltWrt 基于 OpenWrt 正式稳定版，迁回必要定制并维护平台配置、构建流程和升级兼容性。4.0.0 的基线是 OpenWrt **v25.12.6**，固定 commit `64900e756efa667774214f9c6b17c113222e01f7`，Linux **6.12.112**。这是从 24.10 / Linux 6.6 到 25.12 / Linux 6.12 的基础平台迁移，包管理器采用 APK，Wi-Fi 使用上游 ucode 实现。
+
+firewall4/nftables、WireGuard 和双平台支持是已有能力。4.0.0 保留 DNS、DDNS、透明代理、SQM、UPnP、OpenVPN、ocserv、frpc 等功能，并通过新版本依赖解析和最终固件 manifest 核对实际前后端。
+
+PassWall2 在 x86-64 和 RAX3000M 两个平台均明确选择独立 `hysteria` 核心及其 `Hysteria2` 节点类型，同时保留 Sing-box。公共配置、后端检查及固件 manifest 检查要求实际包含 `hysteria` APK；原有 Sing-box QUIC 支持单独保留。该选择属于新构建输入，已固定新 feed，尚待正常构建及 APK／root／镜像验收，不能沿用旧 RAX 产物结论。
+
+## 构建
+
+使用具备 OpenWrt 构建依赖的 Linux、普通用户和区分大小写的文件系统。不要在主机上以 root 编译。macOS 上可在 Docker 的 Linux volume 内构建，不应直接使用大小写不敏感的目录作为构建区。
+
+```sh
+python3 scripts/boltwrt-prepare.py
+python3 scripts/boltwrt-config.py x86-64
+DOWNLOAD_MIRROR=https://sources.cdn.openwrt.org make download -j6
+make -j4 V=s
+python3 scripts/boltwrt-verify.py x86-64
 ```
------------------------------------------------------
-     __________       .__   __   __      __          __
-     \______   \ ____ |  |_/  |_/  \    /  \________/  |_
-      |    |  _//  _ \|  |\   __\   \/\/   /\_  __ \   __\
-      |    |   (  <_> )  |_|  |  \        /  |  | \/|  |
-      |______  /\____/|____/__|   \__/\  /   |__|   |__|
-             \/                        \/
------------------------------------------------------
+
+源码归档优先使用 OpenWrt 官方缓存；缓存未命中时，下载器继续使用各 recipe 的源地址。全部归档仍须符合固定校验值。
+
+顶层 `make download` 不覆盖所有 host 构建依赖；实际编译仍可能补取固定 recipe 的输入，不能据该命令返回 0 推定离线构建已具备全部源码。
+
+在 ARM64 Linux 构建宿主上，上游 Go 1.4 自举起点不可用。可使用宿主已有、满足 [Go 1.26.10 自举要求](https://github.com/golang/go/blob/go1.26.10/src/make.bash)的 Go（至少 1.24.6），在每次编译命令中同时取消内部 bootstrap 并指定其根目录。准备脚本在固定 feed 上精确应用 Go 1.26.10 安全补丁版及官方源码散列，修复 [GO-2026-6809](https://pkg.go.dev/vuln/GO-2026-6809)，不滚动升级 feed。此前产物实际使用 Go 1.26.9，更新后的 Go 程序仍须重新构建验收；镜像内 Go 1.26.8 仅为 bootstrap：
+
+```sh
+go_root="$(GOTOOLCHAIN=local go env GOROOT)" || exit 1
+GOTOOLCHAIN=local "$go_root/bin/go" version
+GOTOOLCHAIN=local make -j4 V=s CONFIG_GOLANG_BUILD_BOOTSTRAP= \
+  CONFIG_GOLANG_EXTERNAL_BOOTSTRAP_ROOT="$go_root"
 ```
 
-## 简介
+保存外部 bootstrap 版本、构建环境身份及有效命令参数；这些覆盖不包含在 `.config` SHA 中。Ubuntu amd64 CI 保持上游原生自举链。
 
-BoltWrt 是基于 OpenWrt 的路由器系统，面向中文网络环境常见场景进行适配与增强。项目在保持 OpenWrt 配置兼容性的基础上，提供更易用的默认配置、更完整的状态监控、更友好的管理界面以及面向实际网络环境的功能集成。
+RAX3000M/Me 使用独立干净构建目录，把目标参数换为 `cmcc-rax3000m`。准备脚本按 `config/source-lock.json` 抓取完整 SHA，验证子模块与已知补丁；不依赖旧版 Go/Python 覆盖或已有下载缓存。重复执行接受已知幂等补丁，遇到源版本、补丁锚点、未知修改或额外包提供者漂移时失败并保留原文件。`defconfig` 后逐项核对产品选择，阻止静默丢失组件或仅有 LuCI 页面而无后端。
 
-BoltWrt 的目标是提供一个高效、稳定、安全、易用且可持续维护的路由器系统。
+自定义 feed 锁定本地已合并的 `fbb14623f8cc66f4dcc7d60d2f142c254919d7de`，包含独立 Hysteria 2.13.0-r1 与 PassWall2 26.4.20-r4（对应新版核心的 fastOpen／PMTU 配置修复）。该新提交尚未推送，当前准备必须显式指定含该提交的本地 Packages 仓库；2026-11-03 已推送的 `43dee65074096b99e30cb83f29c2d85289e0788c` 只是历史输入，不能据此假定 GitHub 可获取新提交。实际新固件、远端 CI 和发布均未完成：
 
-## 特性
+```sh
+python3 scripts/boltwrt-prepare.py --local-feed /absolute/path/to/Packages
+```
 
-- 基于 OpenWrt 24.10，兼容 OpenWrt 生态与配置方式
-- 提供简洁友好的 Web 管理界面
-- 针对中文网络环境适配与增强
-- 适用于硬件路由器、虚拟机及边缘设备
+该入口仅替换抓取位置，仍核对同一个 commit 和全部子模块 SHA。官方五项 feeds、工具链版本及自定义 feed/gitlink 固定值均见 `config/source-lock.json`。准备与配置证据写入忽略目录 `logs/`；实际固件在 `bin/targets/x86/64/` 或 `bin/targets/mediatek/filogic/`。
 
-## 主要组件
+本轮 Go、ChinaDNS/wolfSSL、SSR、v2ray-plugin 及 PassWall2 浏览器修复的来源和验收状态见 [安全与浏览器复核](docs/4.0.0-security-browser.md)。源码提交、目标编译和运行证据分别记录，旧镜像不追认为修复后的产物。
 
-BoltWrt 默认集成了一组面向实际网络环境的常用组件，用于增强 DNS、动态解析、代理、流量控制、远程访问与内网穿透能力。
+## 平台和默认配置
 
-| 组件 | 说明 |
+| 平台 | 镜像与差异 |
 | --- | --- |
-| `smartdns` | 高性能 DNS 解析器，支持多上游并发查询、缓存优化与 DNS 加速策略 |
-| `ddns` | 动态域名解析模块，支持多服务商的域名记录自动更新 |
-| `passwall2` | 代理与策略路由框架，支持多种代理协议、分流策略与透明代理场景 |
-| `sqm` | 智能队列管理模块，用于流量整形、缓解网络拥塞并降低延迟抖动 |
-| `upnp` | 通用即插即用端口转发服务，支持局域网设备自动创建端口映射 |
-| `openvpn` | OpenVPN 客户端与服务端支持，适用于跨平台 VPN 连接场景 |
-| `ocserv` | Cisco AnyConnect 兼容 VPN 服务端，支持 TLS/DTLS 加密连接 |
-| `frpc` | Frp 客户端模块，用于内网穿透、反向代理与远程访问场景 |
+| x86-64 | BIOS / UEFI；SquashFS IMG.gz 与 VMDK；32 MiB boot、384 MiB rootfs；Zabbix 及额外 DDNS providers |
+| RAX3000M/Me | Filogic；NAND / eMMC；DDR3 / DDR4 各自的启动文件；initramfs recovery FIT 与 sysupgrade FIT；USB 存储及 Samba |
 
-> 具体组件可能会随版本演进进行调整，请以当前发布版本的构建配置为准。
+RAX 各变体需匹配实际存储、DDR 和设备布局，不能互换 bootloader。共同 sysupgrade 镜像须小于保守的 104 MiB NAND 包体预算；这不替代坏块、UBI 余量及刷写实机验证。硬件映射和阈值依据见 [平台迁移说明](docs/4.0.0-platform.md)。
 
-## 推荐配置
+新装 LAN 为 `10.126.0.1/18`，默认 hostname 为 BoltWrt，使用预设 NTP；Web 由 nginx HTTPS、uwsgi、LuCI 和 Argon 提供。保留升级中的用户网络、主题与现有证书，不启用第二套 uhttpd 服务。
 
-| 项目 | 推荐要求 |
-| --- | --- |
-| CPU | 支持 64 位指令集 |
-| RAM | 不低于 256 MB |
-| 存储 | 不低于 256 MB |
-| 网络接口 | 至少 1 个以太网接口 |
+## 验证与升级边界
 
-> 实际配置需求取决于设备角色、网络规模、启用功能及流量负载。开启更多服务或承担更高转发压力时，建议使用更高规格的硬件。
+4.0.0 正在开发与验收。容器配置语义测试、源码审查、编译、镜像检查和实机运行是不同证据。编译或静态检查通过不能证明 DHCP、PPPoE、IPv6 PD、DNS、代理、SQM、VPN、无线或保留配置升级可用。
 
-## 部署方式
+本次升级验收范围仅为 **3.1.2 → 4.0.0**。旧 opkg/APK 状态、旧包二进制、内核模块及整个 overlay 不应迁移；需要保留的 UCI、自定义脚本、证书及用户数据必须按实际备份清单核对。阿里云 DDNS 的旧域名格式有专门迁移，见平台说明。2.x、3.0.x 等版本直升兼容性另行验证。
 
-### 虚拟化部署
+自有 APK 仓库、自动更新服务、发布资产完善、新设备和新 UI 不属于本次迁移范围。上游 APK 源不能提供 BoltWrt 自定义包，也不能保证匹配自编内核的模块；不得把上游更新能力视为定制固件已自动适配。
 
-以 VMware 等虚拟化平台为例：
+用户已将运行验收改为本机虚拟环境中的启动、默认配置、APK/LuCI 和受控 3.1.2 升级，并取消 RAX 板级、WAN、服务对端、真实流量和无线测试；取消项均记录为“用户缩减范围，未执行”。[原云端验收交接](docs/4.0.0-cloud-validation.md)保留方案与仿真边界，不表示实际使用云端或完成 RAX 板级启动。
 
-1. 创建虚拟机，并选择对应格式的磁盘镜像，例如 VMDK。
-2. 为虚拟机分配合适的 CPU、内存、磁盘与网卡数量。
-3. 启动系统后，如有需要，根据虚拟网卡顺序调整 `/etc/config/network`，确保 WAN、LAN 等接口绑定正确。
-4. 通过浏览器访问默认管理地址：`http://10.126.0.1`。
-5. 根据实际网络拓扑完成后续配置。
-
-## 默认访问
-
-- 默认管理地址：`http://10.126.0.1`
-- 默认账号：root
-
-## 致谢
-
-BoltWrt 基于 OpenWrt 及其社区生态构建，并使用或参考了多个优秀开源项目，在此表示感谢：
+## 来源与许可证
 
 - [OpenWrt](https://github.com/openwrt/openwrt)
-- [luci-theme-argon](https://github.com/jerrykuku/luci-theme-argon)
-- [清华大学开源软件镜像站](https://mirrors.tuna.tsinghua.edu.cn)
+- [BoltWrt Packages](https://github.com/BoltWrt/Packages)
+- [Argon](https://github.com/jerrykuku/luci-theme-argon)
+- [SmartDNS](https://github.com/pymumu/smartdns)
 
-## 许可证
-
-本项目遵循 [GPL](LICENSE) 许可证发布。
+遵循 [GPL-2.0](COPYING) 及各组件各自的许可证。

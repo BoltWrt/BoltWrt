@@ -5,32 +5,34 @@ on:
     inputs:
       debug_on_failure:
         type: boolean
-        description: 'Open tmate session on build failure?'
-        required: false
+        description: Open an actor-only debug session after failure
         default: false
   push:
     tags:
       - 'v*.*.*'
 
+permissions:
+  contents: read
+
 jobs:
   build:
-    name: Build BoltWrt Firmware (${{ matrix.target }})
+    name: Build BoltWrt (${{ matrix.target }})
     runs-on: ubuntu-24.04
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         include:
           - target: x86-64
-            config_path: config/targets/x86-64.txt
-            artifact_name: BoltWrt-Firmware_x86-64
             target_dir: bin/targets/x86/64
           - target: cmcc-rax3000m
-            config_path: config/targets/cmcc-rax3000m.txt
-            artifact_name: BoltWrt-Firmware_cmcc-rax3000m
             target_dir: bin/targets/mediatek/filogic
+    env:
+      GOPROXY: https://goproxy.cn,direct
+      GOSUMDB: sum.golang.google.cn
+      DOWNLOAD_MIRROR: https://sources.cdn.openwrt.org
     steps:
-      - name: Free up disk space
-        uses: jlumbroso/free-disk-space@v1.3.1
+      - name: Free runner build space
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
         with:
           android: true
           dotnet: true
@@ -40,140 +42,92 @@ jobs:
           tool-cache: true
           swap-storage: false
 
-      - name: Initialize Environment
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Install runner build prerequisites
         run: |
-          df -hT .
-          sudo -E apt-get -qq update
-          sudo -E apt-get -qq install -y build-essential clang flex bison g++ gawk \
-          gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
-          python3-setuptools rsync swig unzip zlib1g-dev file wget qemu-utils
-          sudo timedatectl set-timezone "Asia/Shanghai"
+          sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://mirrors.tuna.tsinghua.edu.cn/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang flex bison g++ gawk \
+            gcc-multilib g++-multilib gettext git libncurses-dev libssl-dev \
+            python3-setuptools python3-pyelftools rsync swig unzip zlib1g-dev file wget qemu-utils
 
-      - name: Checkout Code
-        uses: actions/checkout@v6
-      
-      - name: Setup Feeds
-        working-directory: /home/runner/work/BoltWrt/BoltWrt
-        run: |
-          ./scripts/feeds update -a
+      - name: Check source preparation invariants
+        run: python3 -m unittest discover -s scripts/tests -p 'test_boltwrt_*.py' -v
 
-          # 移除官方 golang 包并引入自定义版本
-          rm -rf feeds/packages/lang/golang
-          mv feeds/BoltWrt/lang/golang feeds/packages/lang/golang
-          # 补充 python 额外组件
-          mv feeds/BoltWrt/lang/python/* feeds/packages/lang/python/
+      - name: Prepare locked feeds
+        run: python3 scripts/boltwrt-prepare.py
 
-          ./scripts/feeds update -i packages
-          ./scripts/feeds install -a
+      - name: Resolve and check product configuration
+        run: python3 scripts/boltwrt-config.py '${{ matrix.target }}'
 
-          # 修改 LuCI 默认主题路径
-          sed -i "s#/luci-static/bootstrap#/luci-static/argon#" feeds/luci/modules/luci-base/root/etc/config/luci
-
-          # 修正 luci-nginx 集合包的依赖
-          sed -i -E "s/[[:space:]]*\+luci-theme-bootstrap//" feeds/luci/collections/luci-nginx/Makefile
-
-          # 修改 nginx ssl 证书生成配置
-          sed -i 's|/C=ZZ/ST=Somewhere/L=None/CN=OpenWrt/O=OpenWrt|/C=CN/ST=Beijing/L=Beijing/CN=BoltWrt/O=BoltWrt|' feeds/packages/net/nginx-util/src/nginx-ssl-util.hpp
-          sed -i -E 's|constexpr[[:space:]]+auto[[:space:]]+validity_days[[:space:]]*=.*;|constexpr auto validity_days = 3650;|' feeds/packages/net/nginx-util/src/nginx-ssl-util.hpp
-
-          # 修复 smartdns makefile 引用路径错误
-          sed -i 's|include[[:space:]]\+\.\./\.\./lang/rust/rust-package\.mk|include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk|' feeds/BoltWrt/net/openwrt-smartdns/Makefile
-
-          # 调整 rust 组件的 ci-llvm 下载选项、
-          sed -i 's/--set=llvm\.download-ci-llvm=true/--set=llvm.download-ci-llvm=false/' feeds/packages/lang/rust/Makefile
-
-          # 清理无用的 feeds 配置文件
-          rm -rf package/feeds/packages/prometheus-node-exporter-lua
-
-      - name: Normalizing Build Configuration
-        id: normalize-config
-        working-directory: /home/runner/work/BoltWrt/BoltWrt
-        run: |
-          mv ${{ matrix.config_path }} .config
-          VERSION_HASH=$( (cat .config feeds.conf.default 2>/dev/null || true) | sha256sum | awk '{print $1}')
-          echo "version_hash=$VERSION_HASH" >> $GITHUB_OUTPUT
-          make defconfig
-
-      - name: Restore DL Cache
-        id: restore-cache
-        uses: actions/cache/restore@v5
+      - name: Restore source download cache
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: dl
-          key: boltwrt-dl-${{ matrix.target }}-${{ steps.normalize-config.outputs.version_hash }}
+          key: boltwrt-dl-${{ matrix.target }}-${{ hashFiles('config/source-lock.json', 'config/version.txt', 'config/common.txt', 'config/targets/*.txt') }}
 
-      - name: Fetch Sources
-        id: fetch-sources
-        if: steps.restore-cache.outputs.cache-hit != 'true'
-        working-directory: /home/runner/work/BoltWrt/BoltWrt
-        run: |
-          echo "Fetching all sources..."
-          make download -j6 || (echo "❌ Failed to fetch sources" && exit 1)
+      - name: Download and verify sources
+        run: make download -j6
 
-      - name: Cache DL Directory
-        if: steps.restore-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v5
-        with:
-          path: dl
-          key: boltwrt-dl-${{ matrix.target }}-${{ steps.normalize-config.outputs.version_hash }}
+      - name: Build firmware
+        run: make -j"$(nproc)" V=s CONFIG_AUTOREMOVE=y
 
-      - name: Build Firmware
-        id: build
-        working-directory: /home/runner/work/BoltWrt/BoltWrt
-        run: |
-          echo "Using $(nproc) processors for building"
-          make -j$(nproc) || make -j1 V=s
-          echo " ==============================="
-          echo " Build completed successfully."
-          echo " ==============================="
-          echo "Listing contents of bin/targets for debugging:"
-          tree -h -L 3 bin/targets
-      
-      - name: Open Debug Session on Failure
-        if: failure() && github.event_name == 'workflow_dispatch' && inputs.debug_on_failure == 'true'
-        uses: mxschmitt/action-tmate@v3
+      - name: Check actual packages and image layouts
+        run: python3 scripts/boltwrt-verify.py '${{ matrix.target }}'
+
+      - name: Open debug session on requested manual failure
+        if: failure() && github.event_name == 'workflow_dispatch' && inputs.debug_on_failure
+        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113 # v3
         with:
           limit-access-to-actor: true
 
-      - name: Upload Firmware Artifacts
-        if: steps.build.outcome == 'success'
-        uses: actions/upload-artifact@v7
+      - name: Upload build evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: ${{ matrix.artifact_name }}
+          name: BoltWrt-Checks_${{ matrix.target }}
           path: |
-            ${{ matrix.target_dir }}/boltwrt-*
+            logs/prepare-sources.json
+            logs/prepare-tools/make-failures.log
+            logs/boltwrt/*.json
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: BoltWrt-Firmware_${{ matrix.target }}
+          path: ${{ matrix.target_dir }}/boltwrt-*
+          if-no-files-found: error
 
   release:
     name: Release Firmware
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    needs: [build]
+    needs: build
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     steps:
-      - name: Download Firmware Artifacts
-        uses: actions/download-artifact@v8
+      - name: Download firmware artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: BoltWrt-Firmware_*
-          path: ./firmware
+          path: firmware
 
-      - name: Package Firmware Archives
+      - name: Package existing firmware delivery format
         run: |
-          mkdir -p ./release
+          mkdir release
           shopt -s nullglob
-
-          for artifact_dir in ./firmware/BoltWrt-Firmware_*; do
-            artifact_name=$(basename "$artifact_dir")
-            platform=${artifact_name#BoltWrt-Firmware_}
-            archive_path="./release/BoltWrt_${platform}_${{ github.ref_name }}.tar.gz"
-
-            tar -C "$artifact_dir" -czf "$archive_path" .
-            echo "Created $archive_path"
+          for artifact_dir in firmware/BoltWrt-Firmware_*; do
+            platform=${artifact_dir#firmware/BoltWrt-Firmware_}
+            tar -C "$artifact_dir" -czf "release/BoltWrt_${platform}_${GITHUB_REF_NAME}.tar.gz" .
           done
 
-      - name: Create Release
-        id: create_release
-        uses: softprops/action-gh-release@v3
+      - name: Create release on an explicitly pushed version tag
+        uses: softprops/action-gh-release@5113cdc90fd4d541c801c55356214017bf5ae34b # v3
         with:
           tag_name: ${{ github.ref_name }}
           name: BoltWrt ${{ github.ref_name }} Release
-          files: ./release/*.tar.gz
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          files: release/*.tar.gz

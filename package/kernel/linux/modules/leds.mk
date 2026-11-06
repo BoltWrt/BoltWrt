@@ -24,6 +24,23 @@ $(eval $(call KernelPackage,leds-gpio))
 
 LED_TRIGGER_DIR=$(LINUX_DIR)/drivers/leds/trigger
 
+define KernelPackage/leds-group-multicolor
+  SUBMENU:=$(LEDS_MENU)
+  TITLE:=LEDs group multicolor support
+  KCONFIG:=CONFIG_LEDS_GROUP_MULTICOLOR
+  FILES:=$(LINUX_DIR)/drivers/leds/rgb/leds-group-multicolor.ko
+  AUTOLOAD:=$(call AutoProbe,leds-group-multicolor)
+endef
+
+define KernelPackage/leds-group-multicolor/description
+ This option enables support for monochrome LEDs that are grouped
+ into multicolor LEDs which is useful in the case where LEDs of
+ different colors are physically grouped in a single multi-color LED
+ and driven by a controller that does not have multi-color support.
+endef
+
+$(eval $(call KernelPackage,leds-group-multicolor))
+
 define KernelPackage/ledtrig-activity
   SUBMENU:=$(LEDS_MENU)
   TITLE:=LED Activity Trigger
@@ -38,21 +55,6 @@ endef
 
 $(eval $(call KernelPackage,ledtrig-activity))
 
-define KernelPackage/ledtrig-audio
-  SUBMENU:=$(LEDS_MENU)
-  TITLE:=LED Audio Mute Trigger
-  KCONFIG:=CONFIG_LEDS_TRIGGER_AUDIO
-  FILES:=$(LED_TRIGGER_DIR)/ledtrig-audio.ko
-  AUTOLOAD:=$(call AutoLoad,50,ledtrig-audio)
-endef
-
-define KernelPackage/ledtrig-audio/description
- Kernel module that allows LEDs to be controlled by audio drivers
- to follow audio mute and mic-mute changes.
-endef
-
-$(eval $(call KernelPackage,ledtrig-audio))
-
 define KernelPackage/ledtrig-gpio
   SUBMENU:=$(LEDS_MENU)
   TITLE:=LED GPIO Trigger
@@ -66,6 +68,22 @@ define KernelPackage/ledtrig-gpio/description
 endef
 
 $(eval $(call KernelPackage,ledtrig-gpio))
+
+
+define KernelPackage/ledtrig-network
+  SUBMENU:=$(LEDS_MENU)
+  TITLE:=LED Network Trigger
+  KCONFIG:=CONFIG_LEDS_TRIGGER_NETWORK
+  FILES:=$(LED_TRIGGER_DIR)/ledtrig-network.ko
+  AUTOLOAD:=$(call AutoLoad,50,ledtrig-network)
+endef
+
+define KernelPackage/ledtrig-network/description
+ Kernel module that allows LEDs to be controlled by network interfaces
+ aggregated by family (lan/wan/wlan), with an optional per-LED '-online' mode.
+endef
+
+$(eval $(call KernelPackage,ledtrig-network))
 
 
 define KernelPackage/ledtrig-transient
@@ -231,6 +249,23 @@ define KernelPackage/leds-pwm/description
 endef
 
 $(eval $(call KernelPackage,leds-pwm))
+
+
+define KernelPackage/leds-st1202
+  SUBMENU:=LED modules
+  TITLE:=LED support for ST LED1202 I2C chips
+  DEPENDS:=+kmod-i2c-core +kmod-ledtrig-pattern
+  KCONFIG:=CONFIG_LEDS_ST1202
+  FILES:= $(LINUX_DIR)/drivers/leds/leds-st1202.ko
+  AUTOLOAD:=$(call AutoProbe,leds-st1202)
+endef
+
+define KernelPackage/leds-st1202/description
+  This option enables support for LEDs connected to LED1202
+  LED driver chips accessed via the I2C bus.
+endef
+
+$(eval $(call KernelPackage,leds-st1202))
 
 
 define KernelPackage/leds-tlc591xx
