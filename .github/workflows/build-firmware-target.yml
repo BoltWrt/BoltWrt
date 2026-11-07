@@ -1,0 +1,206 @@
+name: Build firmware target
+
+on:
+  workflow_call:
+    inputs:
+      target:
+        type: string
+        required: true
+      target_dir:
+        type: string
+        required: true
+      debug_on_failure:
+        type: boolean
+        default: false
+      cold_source_cache:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  GOPROXY: https://goproxy.cn,direct
+  GOSUMDB: sum.golang.google.cn
+  DOWNLOAD_MIRROR: https://sources.cdn.openwrt.org
+
+jobs:
+  prefetch:
+    name: Prefetch sources
+    runs-on: ubuntu-24.04
+    outputs:
+      artifact_id: ${{ steps.sources.outputs.artifact-id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Check source preparation invariants
+        run: python3 -m unittest discover -s scripts/tests -p 'test_boltwrt_*.py' -v
+
+      - name: Prepare source workspace
+        uses: ./.github/actions/prepare-firmware
+        with:
+          target: ${{ inputs.target }}
+
+      - name: Compute source cache key
+        id: cache_key
+        env:
+          CACHE_PREFIX: boltwrt-dl-v2-${{ runner.os }}-${{ runner.arch }}-${{ inputs.target }}-
+        run: |
+          fingerprint=$(
+            {
+              jq -cS 'del(.version)' config/source-lock.json
+              sed -E '/^(# )?CONFIG_VERSION_/d' .config
+              git ls-tree HEAD -- include package target toolchain tools scripts/download.pl scripts/projectsmirrors.json
+            } | sha256sum | cut -d' ' -f1
+          )
+          echo "prefix=$CACHE_PREFIX" >> "$GITHUB_OUTPUT"
+          echo "key=$CACHE_PREFIX$fingerprint" >> "$GITHUB_OUTPUT"
+
+      - name: Restore source download cache
+        if: ${{ !inputs.cold_source_cache }}
+        id: cache
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: dl
+          key: ${{ steps.cache_key.outputs.key }}
+          restore-keys: |
+            ${{ steps.cache_key.outputs.prefix }}
+            boltwrt-dl-${{ inputs.target }}-
+
+      - name: Download and verify sources
+        env:
+          CURL_OPTIONS: >-
+            --silent --show-error --write-out
+            '%{stderr}Source transfer %{url} HTTP %{response_code}, %{size_download} bytes, %{time_total}s\n'
+        run: make download -j6 V=s
+
+      - name: Package verified source downloads
+        run: |
+          if [ -z "$(find dl -type f -print -quit)" ]; then
+            echo "::error::No source files in dl/"
+            exit 1
+          fi
+          du -sh dl
+          bundle="$RUNNER_TEMP/boltwrt-sources"
+          mkdir "$bundle"
+          cp "$RUNNER_TEMP/boltwrt-source-identity" "$bundle/identity"
+          tar -cf "$bundle/dl.tar" dl
+
+      - name: Upload source downloads
+        id: sources
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: BoltWrt-Sources_${{ inputs.target }}_${{ github.run_attempt }}
+          path: ${{ runner.temp }}/boltwrt-sources/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+      - name: Save source download cache
+        if: ${{ steps.cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: dl
+          key: ${{ steps.cache_key.outputs.key }}
+
+      - name: Open debug session on requested manual failure
+        if: ${{ failure() && inputs.debug_on_failure }}
+        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113 # v3
+        with:
+          limit-access-to-actor: true
+
+      - name: Upload prefetch failure evidence
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: BoltWrt-Prefetch-Checks_${{ inputs.target }}_${{ github.run_attempt }}
+          path: |
+            logs/prepare-sources.json
+            logs/prepare-tools/make-failures.log
+            logs/boltwrt/*.json
+
+  compile:
+    name: Compile and verify firmware
+    needs: prefetch
+    runs-on: ubuntu-24.04
+    env:
+      SOURCE_ARTIFACT_ID: ${{ needs.prefetch.outputs.artifact_id }}
+    steps:
+      - name: Require the prefetch Artifact ID
+        run: |
+          if [[ ! "$SOURCE_ARTIFACT_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::Prefetch did not provide a source Artifact ID"
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Prepare build workspace
+        uses: ./.github/actions/prepare-firmware
+        with:
+          target: ${{ inputs.target }}
+
+      - name: Download source Artifact
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          artifact-ids: ${{ needs.prefetch.outputs.artifact_id }}
+          path: ${{ runner.temp }}/boltwrt-sources/
+
+      - name: Verify source identity and restore dl
+        run: |
+          bundle="$RUNNER_TEMP/boltwrt-sources"
+          if ! cmp -s "$RUNNER_TEMP/boltwrt-source-identity" "$bundle/identity"; then
+            echo "::error::Source Artifact identity differs from the build workspace"
+            exit 1
+          fi
+          tar -xf "$bundle/dl.tar"
+          if [ -z "$(find dl -type f -print -quit)" ]; then
+            echo "::error::Source Artifact did not restore files into dl/"
+            exit 1
+          fi
+          rm "$bundle/dl.tar"
+          du -sh dl
+          echo "Verified and restored source Artifact $SOURCE_ARTIFACT_ID"
+
+      - name: Build firmware
+        run: make -j"$(nproc)" V=s CONFIG_AUTOREMOVE=y
+
+      - name: Check actual packages and image layouts
+        env:
+          TARGET: ${{ inputs.target }}
+        run: python3 scripts/boltwrt-verify.py "$TARGET"
+
+      - name: Open debug session on requested manual failure
+        if: ${{ failure() && inputs.debug_on_failure }}
+        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113 # v3
+        with:
+          limit-access-to-actor: true
+
+      - name: Upload build evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: BoltWrt-Checks_${{ inputs.target }}
+          path: |
+            logs/prepare-sources.json
+            logs/prepare-tools/make-failures.log
+            logs/boltwrt/*.json
+          overwrite: true
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: BoltWrt-Firmware_${{ inputs.target }}
+          path: ${{ inputs.target_dir }}/boltwrt-*
+          if-no-files-found: error
+          overwrite: true
