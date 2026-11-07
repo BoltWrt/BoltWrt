@@ -173,7 +173,11 @@ jobs:
           echo "Verified and restored source Artifact $SOURCE_ARTIFACT_ID"
 
       - name: Build firmware
-        run: make -j"$(nproc)" V=s CONFIG_AUTOREMOVE=y
+        run: |
+          if ! make -j"$(nproc)" CONFIG_AUTOREMOVE=y; then
+            echo "::warning::Parallel build failed. Retrying serially with verbose output."
+            make -j1 V=s CONFIG_AUTOREMOVE=y
+          fi
 
       - name: Check actual packages and image layouts
         env:
