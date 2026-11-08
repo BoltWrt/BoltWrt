@@ -12,6 +12,8 @@ import tempfile
 import zlib
 from pathlib import Path
 
+from boltwrt_version import PRODUCT_VERSION, version_from_tag
+
 ROOT = Path(__file__).resolve().parent.parent
 SERVICE_PACKAGES = {
     "DNS": ("dnsmasq-full", "smartdns", "luci-app-smartdns"),
@@ -46,11 +48,11 @@ def digest(path):
         return hashlib.file_digest(handle, "sha256").hexdigest()
 
 
-def product_version():
+def product_version(release_tag=""):
+    if release_tag:
+        return version_from_tag(release_tag)
     version = json.loads((ROOT / "config/source-lock.json").read_text())["version"]
-    number = r"(?:0|[1-9][0-9]*)"
-    require(isinstance(version, str) and
-            re.fullmatch(rf"{number}\.{number}\.{number}(?:-rc[1-9][0-9]*)?", version),
+    require(isinstance(version, str) and re.fullmatch(PRODUCT_VERSION, version),
             "invalid locked product version")
     definitions = [line for line in (ROOT / "config/version.txt").read_text().splitlines()
                    if re.match(r"\s*CONFIG_VERSION_NUMBER\b", line)]
@@ -263,17 +265,18 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("target", choices=("x86-64", "cmcc-rax3000m"))
     parser.add_argument("--directory", type=Path)
+    parser.add_argument("--release-tag", default="", help="check the version from the pushed tag")
     parser.add_argument("--rax-budget-only", action="store_true",
                         help="check only RAX GPT/FIT budgets; no config/manifest/profile checks")
     args = parser.parse_args()
-    version = product_version()
+    version = product_version(args.release_tag)
     if args.rax_budget_only:
         require(args.target == "cmcc-rax3000m", "--rax-budget-only requires cmcc-rax3000m")
         directory = args.directory or ROOT / "bin/targets/mediatek/filogic"
         print(json.dumps(check_rax_fit_budget(directory, version), indent=2))
         return
     subprocess.run([sys.executable, str(ROOT / "scripts/boltwrt-config.py"), args.target,
-                    "--check-only"], check=True)
+                    "--check-only", "--release-tag", args.release_tag], check=True)
     target = "x86/64" if args.target == "x86-64" else "mediatek/filogic"
     directory = args.directory or ROOT / "bin/targets" / target
     manifest, profiles = image_metadata(directory, args.target, version)

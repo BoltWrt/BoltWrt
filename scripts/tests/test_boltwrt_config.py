@@ -2,13 +2,16 @@
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location("config", Path(__file__).parents[1] / "boltwrt-config.py")
 config = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(config)
+with patch.object(sys, "path", [str(Path(spec.origin).parent), *sys.path]):
+    spec.loader.exec_module(config)
 
 
 class ConfigTests(unittest.TestCase):
@@ -67,6 +70,25 @@ class ConfigTests(unittest.TestCase):
         self.verify(())
         record = json.loads((self.root / "logs/boltwrt/x86-64-config.json").read_text())
         self.assertNotIn("haproxy", record["packages"])
+
+    def test_release_tag_drives_config_generation_and_check_only(self):
+        fragment = self.root / "config/version.txt"
+        fragment.write_text('CONFIG_VERSION_NUMBER="4.0.0"\n')
+        common = self.root / "config/common.txt"
+        common.write_text("".join(f"{key}={value}\n" for key, value in self.actual.items()))
+
+        args = ["boltwrt-config.py", "x86-64", "--release-tag", "v4.1.0-rc2"]
+        with patch.object(sys, "argv", args), patch.object(
+            config.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, "")
+        ):
+            config.main()
+        self.assertEqual(config.read_config(self.root / ".config")["CONFIG_VERSION_NUMBER"], '"4.1.0-rc2"')
+        self.assertEqual(fragment.read_text(), 'CONFIG_VERSION_NUMBER="4.0.0"\n')
+
+        with patch.object(sys, "argv", [*args, "--check-only"]):
+            config.main()
+        with self.assertRaisesRegex(ValueError, "CONFIG_VERSION_NUMBER"):
+            config.verify("x86-64")
 
 
 if __name__ == "__main__":

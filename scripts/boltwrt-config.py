@@ -8,6 +8,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from boltwrt_version import version_from_tag
+
 ROOT = Path(__file__).resolve().parent.parent
 TARGETS = ("x86-64", "cmcc-rax3000m")
 PASSWALL_CLIENT_BACKENDS = {
@@ -39,7 +41,7 @@ def read_config(path):
     return values
 
 
-def requested(target):
+def requested(target, release_tag=""):
     result = {}
     origins = {}
     for path in (ROOT / "config/version.txt", ROOT / "config/common.txt",
@@ -49,11 +51,13 @@ def requested(target):
                 raise ValueError(f"{key} conflicts between {origins[key]} and {path}")
             result[key] = value
             origins[key] = path
+    if release_tag:
+        result["CONFIG_VERSION_NUMBER"] = f'"{version_from_tag(release_tag)}"'
     return result
 
 
-def verify(target):
-    want = requested(target)
+def verify(target, release_tag=""):
+    want = requested(target, release_tag)
     actual = read_config(ROOT / ".config")
     required = {
         "CONFIG_USE_APK": "y",
@@ -104,9 +108,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("target", choices=TARGETS)
     parser.add_argument("--check-only", action="store_true")
+    parser.add_argument("--release-tag", default="", help="use the pushed tag as the firmware version")
     args = parser.parse_args()
     if not args.check_only:
-        values = requested(args.target)
+        values = requested(args.target, args.release_tag)
         text = "# Generated from config/version.txt, common.txt and the target fragment.\n"
         text += "\n".join(f"# {key} is not set" if value == "n" else f"{key}={value}"
                           for key, value in values.items()) + "\n"
@@ -120,7 +125,7 @@ def main():
         # The upstream make recipe can hide conf errors behind a successful status.
         if re.search(r"(?m)^(?:[^\n]*:[0-9]+:error:|.*recursive dependency detected!)", result.stdout):
             raise ValueError("Kconfig reported an error despite make's successful exit status")
-    verify(args.target)
+    verify(args.target, args.release_tag)
 
 
 if __name__ == "__main__":

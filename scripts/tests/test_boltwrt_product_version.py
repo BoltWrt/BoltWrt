@@ -2,13 +2,15 @@
 import importlib.util
 import json
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('boltwrt_verify', Path(__file__).parents[1] / 'boltwrt-verify.py')
 verify = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(verify)
+with patch.object(sys, 'path', [str(Path(spec.origin).parent), *sys.path]):
+    spec.loader.exec_module(verify)
 
 
 class ProductVersionTests(unittest.TestCase):
@@ -71,6 +73,23 @@ class ProductVersionTests(unittest.TestCase):
                 self.identity(version)
                 with self.assertRaisesRegex(ValueError, 'invalid locked product version'):
                     verify.product_version()
+
+    def test_release_tag_sets_the_expected_version_for_both_targets(self):
+        self.identity('4.0.0')
+        for tag in ('v4.0.1', 'v4.1.0-rc2'):
+            for target in ('x86-64', 'cmcc-rax3000m'):
+                with self.subTest(tag=tag, target=target):
+                    version = verify.product_version(tag)
+                    self.assertEqual(version, tag[1:])
+                    directory, manifest, profiles = self.metadata(version, target)
+                    self.assertEqual(verify.image_metadata(directory, target, version), (manifest, profiles))
+                    manifest.unlink()
+        self.assertEqual(verify.product_version(), '4.0.0')
+
+    def test_unsafe_or_noncanonical_release_tag_is_rejected(self):
+        for tag in ('4.0.1', 'v4.0.1/foo', 'v04.0.1', 'v4.0.1-rc0', 'v4.0.1\n'):
+            with self.subTest(tag=tag), self.assertRaisesRegex(ValueError, 'invalid release tag'):
+                verify.product_version(tag)
 
     def test_profile_version_target_and_member_must_match(self):
         directory, _, original = self.metadata('4.0.0-rc1', 'x86-64')

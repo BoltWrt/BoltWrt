@@ -2,13 +2,16 @@
 import importlib.util
 from pathlib import Path
 import struct
+import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 import zlib
 
 spec = importlib.util.spec_from_file_location('boltwrt_verify', Path(__file__).parents[1] / 'boltwrt-verify.py')
 verify = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(verify)
+with patch.object(sys, 'path', [str(Path(spec.origin).parent), *sys.path]):
+    spec.loader.exec_module(verify)
 MIB = 1024 * 1024
 PREFIX = 'boltwrt-4.0.0-mediatek-filogic-cmcc_rax3000m-'
 
