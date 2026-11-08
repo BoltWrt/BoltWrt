@@ -4,7 +4,7 @@ BoltWrt 是基于 OpenWrt 的路由器系统，提供中文管理界面，并集
 
 4.0.0 基于 OpenWrt 25.12.6，采用 Linux 6.12 内核和 APK 软件包管理器。
 
-## 获取固件
+## 📥获取固件
 
 固件和版本说明通过 GitHub Releases 提供。下载时选择与设备匹配的平台，并核对版本号。 [固件发布页](https://github.com/BoltWrt/BoltWrt/releases)
 
@@ -14,9 +14,9 @@ BoltWrt 是基于 OpenWrt 的路由器系统，提供中文管理界面，并集
 | --- | --- |
 | x86-64，BIOS 启动 | `-combined.img.gz` 或 `-combined.vmdk` |
 | x86-64，UEFI 启动 | `-combined-efi.img.gz` 或 `-combined-efi.vmdk` |
-| CMCC RAX3000M / RAX3000Me | `-squashfs-sysupgrade.itb` 为系统升级镜像，`-recovery.itb` 为恢复镜像 |
+| CMCC RAX3000M / RAX3000Me | `-squashfs-sysupgrade.itb` 为系统升级镜像，`-initramfs-recovery.itb` 为恢复镜像 |
 
-## 开始使用
+## 🚀开始使用
 
 ### x86-64 设备与虚拟机
 
@@ -43,7 +43,7 @@ BoltWrt 是基于 OpenWrt 的路由器系统，提供中文管理界面，并集
 
 系统版本、运行状态和网络信息可在「状态 → 概览」查看。
 
-## 主要组件
+## 🧩主要组件
 
 BoltWrt 集成了常用的 DNS、代理、流量管理和远程访问组件，可在管理界面中按需配置。
 
@@ -63,7 +63,7 @@ BoltWrt 集成了常用的 DNS、代理、流量管理和远程访问组件，�
 
 软件包在「系统 → 软件包」中管理。安装时应选择适配当前固件和设备平台的 APK。OpenWrt 软件源不提供 BoltWrt 的定制组件；内核模块需要与当前固件配套，仅内核版本号相同仍可能无法安装。
 
-## 备份与升级
+## 💾备份与升级
 
 以下介绍 x86-64、CMCC RAX3000M 和 RAX3000Me 的备份、升级与恢复，升级步骤以 3.1.2 升级到 4.0.0 为例。其他旧版本请先查阅对应版本的升级说明。
 
@@ -95,9 +95,9 @@ BoltWrt 集成了常用的 DNS、代理、流量管理和远程访问组件，�
 
 恢复配置时，在「系统 → 备份与更新」点击「上传备份…」，选择同一设备、相同固件版本导出的备份，核对文件清单后点击「继续」。重启后使用备份中保存的 LAN 地址登录。
 
-RAX3000M / RAX3000Me 的 `-recovery.itb` 用于启动恢复环境，不能代替普通升级镜像。若设备无法正常启动，请按 [OpenWrt 设备指南](https://openwrt.org/toh/cmcc/rax3000m) 中与自身闪存、内存类型及引导方式相符的步骤恢复。
+RAX3000M / RAX3000Me 的 `-initramfs-recovery.itb` 用于启动精简恢复环境。正常升级使用 `-squashfs-sysupgrade.itb`。若设备无法正常启动，请按与自身闪存、内存类型及引导方式相符的步骤恢复。 [OpenWrt 设备指南](https://openwrt.org/toh/cmcc/rax3000m)
 
-## 常见问题
+## ❓常见问题
 
 - **无法打开管理页面**
 
@@ -120,6 +120,12 @@ RAX3000M / RAX3000Me 的 `-recovery.itb` 用于启动恢复环境，不能代替
   先保存配置备份，再到「系统 → 备份与更新」中的「重置为默认」点击「执行重置」。设备会清除现有设置并重启。
 
 其他问题可通过 GitHub Issues 反馈。请提供设备型号、硬件版本、固件版本和错误信息，必要时附上「状态 → 系统日志」中的相关内容。提交前请移除密码、密钥和订阅地址。 [反馈问题](https://github.com/BoltWrt/BoltWrt/issues)
+
+## 🔧构建与历史记录
+
+固件构建以源码锁和 CI 工作流为准。 [源码锁](config/source-lock.json) · [构建工作流](.github/workflows/build-firmware-target.yml)
+
+4.0.0 的验收原文和测试说明随发布标签保留。 [验收原文](https://github.com/BoltWrt/BoltWrt/tree/v4.0.0/docs) · [运行夹具](https://github.com/BoltWrt/BoltWrt/tree/v4.0.0/tests/runtime)
 
 ## 致谢
 

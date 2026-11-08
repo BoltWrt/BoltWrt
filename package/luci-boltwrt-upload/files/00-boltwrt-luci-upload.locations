@@ -1,0 +1,8 @@
+# Match before luci.locations while allowing an administrator's exact match.
+location ~ ^/cgi-bin/cgi-upload$ {
+	include uwsgi_params;
+	uwsgi_param SERVER_ADDR $server_addr;
+	uwsgi_modifier1 9;
+	uwsgi_request_buffering off;
+	uwsgi_pass unix:////var/run/luci-cgi_io.socket;
+}

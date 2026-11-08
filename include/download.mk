@@ -68,6 +68,7 @@ gen_sha256sum = $(shell $(MKHASH) sha256 $(DL_DIR)/$(1))
 # Used in Build/CoreTargets and HostBuild/Core as an integrity check for
 # downloaded files.  It will add a FORCE rule if the sha256 hash does not
 # match, so that the download can be more thoroughly handled by download.pl.
+ifndef BOLTWRT_DOWNLOAD_MANIFEST
 define check_download_integrity
   expected_hash:=$(strip $(if $(filter-out x,$(HASH)),$(HASH),$(MIRROR_HASH)))
   $$(if $$(and $(FILE),$$(wildcard $(DL_DIR)/$(FILE)), \
@@ -77,6 +78,13 @@ define check_download_integrity
       $(DL_DIR)/$(FILE): FORCE) \
   )
 endef
+endif
+
+# A checksum pins the archive bytes regardless of mirror or source URL.
+download_manifest_hash = $(filter-out x skip,$(if $(filter default,$(call dl_method,$(URL),$(PROTO))),$(HASH),$(if $(MIRROR),$(MIRROR_HASH))))
+download_manifest_entry = $(if $(DL_SUBDIR),$(DL_SUBDIR)/)$(FILE)|$(strip \
+	$(if $(download_manifest_hash),$(download_manifest_hash), \
+		$(call dl_method,$(URL),$(PROTO))|$(URL)|$(URL_FILE)|$(SOURCE_VERSION)|$(SUBDIR)|$(OPTS)|$(SUBMODULES)))
 
 ifdef CHECK
 check_escape=$(subst ','\'',$(1))
@@ -359,7 +367,10 @@ define Download
   )
   download: $(DL_DIR)/$(FILE)
 
-  $(DL_DIR)/$(FILE):
+  $(DL_DIR)/$(FILE): $(if $(BOLTWRT_DOWNLOAD_MANIFEST),FORCE)
+  ifdef BOLTWRT_DOWNLOAD_MANIFEST
+	@$$(info BOLTWRT_DOWNLOAD|$(download_manifest_entry))
+  else
 	mkdir -p $(DL_DIR)
 	$(call locked, \
 		$(if $(DownloadMethod/$(call dl_method,$(URL),$(PROTO))), \
@@ -367,5 +378,6 @@ define Download
 			$(DownloadMethod/unknown) \
 		),\
 		$(FILE))
+  endif
 
 endef

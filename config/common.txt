@@ -11,6 +11,7 @@ CONFIG_IPV6=y
 
 # Use one web server stack: nginx -> uwsgi -> LuCI, plus Argon.
 CONFIG_PACKAGE_luci-nginx=y
+CONFIG_PACKAGE_luci-boltwrt-upload=y
 CONFIG_PACKAGE_nginx-ssl=y
 CONFIG_PACKAGE_nginx-mod-luci=y
 CONFIG_PACKAGE_nginx-mod-ubus=y

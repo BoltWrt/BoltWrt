@@ -201,8 +201,13 @@ else
   DOWNLOAD_DIRS = package/download
 endif
 
-download: .config FORCE $(if $(wildcard $(STAGING_DIR_HOST)/bin/flock),,tools/flock/compile) $(if $(wildcard $(STAGING_DIR_HOST)/bin/zstd),,tools/zstd/compile)
+download: .config FORCE
 	@+set -e; $(foreach dir,$(DOWNLOAD_DIRS),$(SUBMAKE) $(dir);)
+
+# Listing the sources does not require the tools that fetch and pack them.
+ifndef BOLTWRT_DOWNLOAD_MANIFEST
+download: $(if $(wildcard $(STAGING_DIR_HOST)/bin/flock),,tools/flock/compile) $(if $(wildcard $(STAGING_DIR_HOST)/bin/zstd),,tools/zstd/compile)
+endif
 
 clean dirclean: .config
 	@+$(SUBMAKE) -r $@
