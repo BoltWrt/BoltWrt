@@ -15,10 +15,11 @@ armsr 内核已有 PL011、virtio 块设备/网卡及 ext4 支持，无需修改
 仍以 `-append console=ttyAMA0 ...` 选择直接启动控制台；这不依赖
 `CONFIG_TARGET_SERIAL` 的 alternate getty 选择。
 
-在独立、固定相同源码及 feeds 的构建目录中执行，不使用产品工作目录：
+在独立构建目录根路径准备相同锁定源码和 feeds。先执行 `boltwrt-prepare.py`，再生成夹具配置。
 
 ```sh
-python3 scripts/boltwrt-arm-fixture.py --root /work
+python3 scripts/boltwrt-prepare.py
+python3 scripts/boltwrt-arm-fixture.py
 ```
 
 首次运行要求 `.config` 不存在，或恰好等于请求片段。非 raw 配置仅当其字节
@@ -30,12 +31,11 @@ python3 scripts/boltwrt-arm-fixture.py --root /work
 旧版检查输出也不能代替新 prepare 成功凭据。
 它不会调用、扩展或授予产品 `boltwrt-config.py`/`boltwrt-verify.py` 通过结果。
 
-使用原有正常构建流程及所需 ARM64 host Go bootstrap 覆盖完成构建后，
-显式传入这次构建的 manifest：
+按固件构建指南执行下载与编译。ARM64 宿主使用同样的 Go bootstrap 参数。
+夹具使用自己的配置和产物检查。构建后将实际 manifest 路径赋给 `manifest`。 [固件构建](../../docs/build.md#本地构建)
 
 ```sh
-python3 scripts/boltwrt-arm-fixture.py --root /work --check-only \
-  --manifest bin/targets/armsr/armv8/<actual-image>.manifest
+python3 scripts/boltwrt-arm-fixture.py --check-only --manifest "$manifest"
 ```
 
 `--check-only`（含 manifest）只向 stdout 输出只读 JSON，不写配置快照或
@@ -55,3 +55,5 @@ manifest 本身不含包架构；
 Rust host 工具实际可能安装在 RAX target 下的 `host/` 子树；复用前核对
 锁定 recipe、实际 ELF/链接和安装 stamp，不能仅复制 hostpkg stamp 就认为齐备。
 构建/VM 的命令、CLI 覆盖、退出码、产物摘要和运行证据仍须由执行者单独记录。
+
+从本次产物选择通用内核及 ext4 rootfs，再进入 QEMU 启动和运行检查。 [运行测试](../../tests/runtime/README.md#arm-测试范围)
