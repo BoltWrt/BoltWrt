@@ -39,6 +39,12 @@ VERSION_DIST:=$(call qstrip,$(CONFIG_VERSION_DIST))
 VERSION_DIST:=$(if $(VERSION_DIST),$(VERSION_DIST),OpenWrt)
 VERSION_DIST_SANITIZED:=$(call sanitize,$(VERSION_DIST))
 
+# Keep the historical stable suffix in the BoltWrt login banner.
+VERSION_BANNER_SUFFIX:=$(comma) $(VERSION_CODE)
+ifeq ($(VERSION_DIST),BoltWrt)
+  VERSION_BANNER_SUFFIX:=$(if $(findstring -rc,$(VERSION_NUMBER)),,$(comma) stable)
+endif
+
 VERSION_MANUFACTURER:=$(call qstrip,$(CONFIG_VERSION_MANUFACTURER))
 VERSION_MANUFACTURER:=$(if $(VERSION_MANUFACTURER),$(VERSION_MANUFACTURER),OpenWrt)
 
@@ -97,6 +103,7 @@ VERSION_SED_SCRIPT:=$(SED) 's,%U,$(call sed_escape,$(VERSION_REPO)),g' \
 	-e 's,%V,$(call sed_escape,$(VERSION_NUMBER)),g' \
 	-e 's,%v,\L$(call sed_escape,$(subst $(space),_,$(VERSION_NUMBER))),g' \
 	-e 's,%C,$(call sed_escape,$(VERSION_CODE)),g' \
+	-e 's,@VERSION_BANNER_SUFFIX@,$(call sed_escape,$(VERSION_BANNER_SUFFIX)),g' \
 	-e 's,%c,\L$(call sed_escape,$(subst $(space),_,$(VERSION_CODE))),g' \
 	-e 's,%D,$(call sed_escape,$(VERSION_DIST)),g' \
 	-e 's,%d,\L$(call sed_escape,$(subst $(space),_,$(VERSION_DIST))),g' \
