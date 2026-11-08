@@ -51,15 +51,19 @@ jobs:
       - name: Compute source cache key
         id: cache_key
         env:
-          CACHE_PREFIX: boltwrt-dl-v2-${{ runner.os }}-${{ runner.arch }}-${{ inputs.target }}-
+          CACHE_PREFIX: boltwrt-dl-${{ inputs.target }}-
         run: |
-          fingerprint=$(
-            {
-              jq -cS 'del(.version)' config/source-lock.json
-              sed -E '/^(# )?CONFIG_VERSION_/d' .config
-              git ls-tree HEAD -- include package target toolchain tools scripts/download.pl scripts/projectsmirrors.json
-            } | sha256sum | cut -d' ' -f1
-          )
+          # Some packages append commands to their download recipes.
+          if ! make_output=$(make --no-print-directory -n -s -j6 -Otarget V=s BOLTWRT_DOWNLOAD_MANIFEST=1 download 2>&1); then
+            printf '%s\n' "$make_output" >&2
+            exit 1
+          fi
+          manifest=$(printf '%s\n' "$make_output" | sed -n 's/^BOLTWRT_DOWNLOAD|//p' | LC_ALL=C sort -u)
+          if [ -z "$manifest" ]; then
+            echo "::error::No source downloads in the OpenWrt manifest"
+            exit 1
+          fi
+          fingerprint=$(printf '%s\n' "$manifest" | sha256sum | cut -d' ' -f1)
           echo "prefix=$CACHE_PREFIX" >> "$GITHUB_OUTPUT"
           echo "key=$CACHE_PREFIX$fingerprint" >> "$GITHUB_OUTPUT"
 
@@ -72,7 +76,7 @@ jobs:
           key: ${{ steps.cache_key.outputs.key }}
           restore-keys: |
             ${{ steps.cache_key.outputs.prefix }}
-            boltwrt-dl-${{ inputs.target }}-
+            boltwrt-dl-v2-${{ runner.os }}-${{ runner.arch }}-${{ inputs.target }}-
 
       - name: Download and verify sources
         env:

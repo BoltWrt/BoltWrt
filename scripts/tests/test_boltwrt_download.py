@@ -1,4 +1,4 @@
-"""A failure in any download phase must reach the top-level make caller."""
+"""Exercise the download rules used by firmware builds and the source cache."""
 from pathlib import Path
 import hashlib
 import subprocess
@@ -30,7 +30,7 @@ class DownloadStatusTests(unittest.TestCase):
 
 
 class DownloadCacheTests(unittest.TestCase):
-    def check_cache(self, downloads, cached, repeat_guard=False):
+    def check_cache(self, downloads, cached, repeat_guard=False, manifest=False):
         """Run the real Download macro; a forced recipe deliberately fails."""
         with tempfile.TemporaryDirectory(prefix="boltwrt-download-cache-") as name:
             root = Path(name)
@@ -64,10 +64,14 @@ class DownloadCacheTests(unittest.TestCase):
                 # BuildPackage/HostBuild retain this second call for the primary source.
                 fixture += "$(eval $(call check_download_integrity))\n"
             (root / "Makefile").write_text(fixture)
-            result = subprocess.run(["make", "download"], cwd=root, text=True,
+            args = ["make", "download"]
+            if manifest:
+                args.extend(["-n", "-s", "BOLTWRT_DOWNLOAD_MANIFEST=1"])
+            result = subprocess.run(args, cwd=root, text=True,
                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             visited = (root / "visited").read_text().splitlines() if (root / "visited").exists() else []
-            hashes = (root / "hash-calls").read_text().splitlines()
+            hash_log = root / "hash-calls"
+            hashes = hash_log.read_text().splitlines() if hash_log.exists() else []
             return result, visited, hashes
 
     def test_correct_named_http_cache_is_reused_and_hash_takes_priority(self):
@@ -107,6 +111,31 @@ class DownloadCacheTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0, result.stdout)
         self.assertEqual(visited, ["second.tar.gz"])
         self.assertEqual(len(hashes), 2)
+
+    def test_manifest_pins_archives_without_reading_or_downloading_them(self):
+        http_hash, git_hash = "1" * 64, "2" * 64
+        result, visited, hashes = self.check_cache(
+            [{"FILE": "first.tar.gz", "HASH": http_hash, "MIRROR_HASH": "3" * 64},
+             {"FILE": "second.tar.gz", "PROTO": "git", "SUBDIR": "second",
+              "SOURCE_VERSION": "4" * 40, "MIRROR_HASH": git_hash}],
+            {"first.tar.gz": b"existing cache"}, repeat_guard=True, manifest=True)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(result.stdout.splitlines(),
+                         [f"BOLTWRT_DOWNLOAD|first.tar.gz|{http_hash}",
+                          f"BOLTWRT_DOWNLOAD|second.tar.gz|{git_hash}"])
+        self.assertEqual(visited, [])
+        self.assertEqual(hashes, [])
+
+    def test_manifest_uses_source_identity_when_checksum_is_unavailable(self):
+        revision = "5" * 40
+        result, visited, _ = self.check_cache(
+            [{"FILE": "unpinned.tar.gz", "PROTO": "git", "SUBDIR": "unpinned",
+              "SOURCE_VERSION": revision, "MIRROR_HASH": "skip", "SUBMODULES": "child"}],
+            {}, manifest=True)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(result.stdout.strip(),
+                         f"BOLTWRT_DOWNLOAD|unpinned.tar.gz|git|https://example.invalid/source||{revision}|unpinned||child")
+        self.assertEqual(visited, [])
 
 
 if __name__ == "__main__":
