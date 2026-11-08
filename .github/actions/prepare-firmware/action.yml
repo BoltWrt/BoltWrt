@@ -38,7 +38,7 @@ runs:
       env:
         TARGET: ${{ inputs.target }}
       run: |
-        python3 scripts/boltwrt-config.py "$TARGET"
+        python3 scripts/boltwrt-config.py "$TARGET" --release-tag "${BOLTWRT_RELEASE_TAG:-}"
         if [ "$(make -s val.DL_DIR)" != "$PWD/dl" ]; then
           echo "::error::OpenWrt download directory differs from the Artifact and cache path"
           exit 1

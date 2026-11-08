@@ -27,6 +27,7 @@ env:
   GOPROXY: https://goproxy.cn,direct
   GOSUMDB: sum.golang.google.cn
   DOWNLOAD_MIRROR: https://sources.cdn.openwrt.org
+  BOLTWRT_RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_type == 'tag' && github.ref_name || '' }}
 
 jobs:
   prefetch:
@@ -186,7 +187,7 @@ jobs:
       - name: Check actual packages and image layouts
         env:
           TARGET: ${{ inputs.target }}
-        run: python3 scripts/boltwrt-verify.py "$TARGET"
+        run: python3 scripts/boltwrt-verify.py "$TARGET" --release-tag "$BOLTWRT_RELEASE_TAG"
 
       - name: Open debug session on requested manual failure
         if: ${{ failure() && inputs.debug_on_failure }}
