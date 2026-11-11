@@ -29,7 +29,11 @@ GUEST = Path(__file__).with_name("guest")
 class Case:
     def __init__(self, args):
         self.args = args
-        self.results = {"status": "running", "steps": {}, "boot_ids": []}
+        self.results = {"status": "running", "steps": {}, "boot_ids": [],
+                        "tooling_sha256": {
+                            "refresh_401.py": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                            "qemu_runtime.py": hashlib.sha256(Path(qemu.__file__).read_bytes()).hexdigest(),
+                        }, "uploads": []}
         self.phase = "preflight"
         self.known = False
         self.launched = False
@@ -88,7 +92,12 @@ if [ "$(uci -q get system.ntp.enabled)" != 0 ]; then pidof ntpd >/dev/null; fi
         raise TimeoutError("expected release and new boot did not become ready")
 
     def upload(self, local, remote):
-        result = self.ssh("umask 077; cat > " + shlex.quote(remote), payload=Path(local).read_bytes(), timeout=180)
+        payload = Path(local).read_bytes()
+        result = self.ssh("umask 077; cat > " + shlex.quote(remote), payload=payload, timeout=180)
+        self.results["uploads"].append({"remote": remote, "bytes": len(payload),
+                                        "sha256": hashlib.sha256(payload).hexdigest(),
+                                        "returncode": result.returncode})
+        self.save()
         if result.returncode:
             raise RuntimeError("fixture upload failed")
 

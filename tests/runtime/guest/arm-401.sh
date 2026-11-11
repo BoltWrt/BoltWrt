@@ -37,6 +37,7 @@ cleanup() {
 trap cleanup EXIT
 printf '%s\n' 'Actual RAX rootfs, ARM64 native userland, original 4.0.0 UCI fixture; no board boot, kernel-module loading or device writes.' > "$report/scope.txt"
 printf '%s\n' "$fixture_sha256" > "$report/fixture.sha256"
+sha256sum "$0" "$tools/passwall-401.lua" "$tools/proxy-401.sh" "$tools/apk-trust-401.sh" > "$report/test-tools.sha256"
 mkdir -p /tmp/run/ubus /tmp/.uci /tmp/state /tmp/log /tmp/etc
 chmod 700 /tmp/.uci
 tar -xzf "$fixture" -C /
