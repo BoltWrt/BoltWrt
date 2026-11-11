@@ -49,6 +49,20 @@ class PrepareTests(unittest.TestCase):
         self.git(repo, "commit", "-qm", "fixture")
         return repo
 
+    def test_cached_go_dependency_must_match_the_unified_compiler(self):
+        (self.root / "feeds").mkdir()
+        (self.root / "tmp").mkdir()
+        feed = self.root / "feeds/packages.index"
+        actual = self.root / "tmp/.packageinfo"
+        feed.write_text("Source-Makefile: feeds/packages/lang/golang/golang/Makefile\nBuild-Depends/host: golang1.27/host\n")
+        actual.write_text("Source-Makefile: package/feeds/packages/golang/Makefile\nBuild-Depends/host: golang1.26/host\n")
+        baseline = {"golang": {"default_series": "1.27"}}
+        with self.assertRaisesRegex(prepare.PrepareError, "cached Go host dependency"):
+            prepare.verify_toolchain_metadata(self.root, baseline)
+        actual.write_text(actual.read_text().replace("golang1.26/host", "golang1.27/host"))
+        prepare.verify_toolchain_metadata(self.root, baseline)
+        self.assertEqual(set(baseline["golang"]["metadata_sha256"]), {"feeds/packages.index", "tmp/.packageinfo"})
+
     def git(self, repo, *args):
         return subprocess.check_output(["git", "-C", str(repo), *args], text=True).strip()
 

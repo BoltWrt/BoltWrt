@@ -89,6 +89,11 @@ PATCHES = {
         # golang1.27/host dependencies resolve to this same compiler instance.
         "lang/golang/golang-values.mk": [
             ("GO_DEFAULT_VERSION:=1.26\n", "GO_DEFAULT_VERSION:=1.27\n")],
+        "lang/golang/golang/Makefile": [
+            ("include ../golang-values.mk\n", "include ../golang-values.mk\n\nSCAN_DEPS:=../golang-values.mk\n")],
+        "lang/rust/Makefile": [
+            ("PKG_SOURCE_URL:=https://static.rust-lang.org/dist/\n",
+             "PKG_SOURCE_URL:=https://rsproxy.cn/dist/ https://static.rust-lang.org/dist/\n")],
         "net/nginx-util/src/nginx-ssl-util.hpp": [
             ("/C=ZZ/ST=Somewhere/L=None/CN=OpenWrt/O=OpenWrt",
              "/C=CN/ST=Beijing/L=Beijing/CN=BoltWrt/O=BoltWrt"),
@@ -377,6 +382,27 @@ def verify_toolchains(root, lock):
                        "recipe_sha256": hashlib.sha256(recipe.encode()).hexdigest()}}
 
 
+def verify_toolchain_metadata(root, toolchains):
+    """Included makefiles must affect the real cached dependency graph too."""
+    if "golang" not in toolchains:
+        return
+    go = toolchains["golang"]
+    expected = "golang" + go["default_series"] + "/host"
+    hashes = {}
+    for relative, source in (
+        ("feeds/packages.index", "feeds/packages/lang/golang/golang/Makefile"),
+        ("tmp/.packageinfo", "package/feeds/packages/golang/Makefile"),
+    ):
+        text = (root / relative).read_text()
+        blocks = re.findall(r"^Source-Makefile: " + re.escape(source) +
+                            r"\n(.*?)(?=^Source-Makefile: |\Z)", text, re.M | re.S)
+        dependencies = re.findall(r"^Build-Depends/host: (.+)$", blocks[0], re.M) if len(blocks) == 1 else []
+        if dependencies != [expected]:
+            raise PrepareError(f"{relative}: cached Go host dependency differs from {expected}")
+        hashes[relative] = hashlib.sha256(text.encode()).hexdigest()
+    go["metadata_sha256"] = hashes
+
+
 def product_roots(indexes, winners, choices):
     return {source: feed for source, feed in winners.items()
             if feed == "BoltWrt" or indexes[feed][source] & choices}
@@ -531,6 +557,7 @@ def prepare(root, local_feed=None):
     if (root / ".config").exists():
         checked_make(root, env, "defconfig")
     verify_links(root, winners, rejected, required_sources=roots)
+    verify_toolchain_metadata(root, toolchains)
     installed = {source: feed for source, feed in winners.items()
                  if (root / "package/feeds" / feed / Path(source).name).is_symlink()}
     evidence = {"source_lock_sha256": hashlib.sha256(lock_path.read_bytes()).hexdigest(),
