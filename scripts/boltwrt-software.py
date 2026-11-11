@@ -56,7 +56,7 @@ def check_versions(manifest, policy):
     return checked
 
 
-def check_go_archive(archive, go, expected):
+def check_go_archive(archive, go, expected, architecture=None):
     programs = {}
     with tempfile.TemporaryDirectory(prefix="boltwrt-buildinfo-") as temporary:
         payload = Path(temporary) / "payload"
@@ -86,9 +86,22 @@ def check_go_archive(archive, go, expected):
                 version = match[1] if match else None
                 if version != "go" + expected:
                     raise ValueError(f"{name}: expected go{expected}, found {version}")
+                environment = {}
+                for line in result.stdout.splitlines()[1:]:
+                    setting = re.match(r"\s*build\s+(GOOS|GOARCH|GOAMD64|GOARM64|CGO_ENABLED)=(.*)$", line)
+                    if setting:
+                        environment[setting[1]] = setting[2]
+                if architecture:
+                    machine = 62 if architecture == "amd64" else 183
+                    if (content[4:6] != b"\x02\x01" or int.from_bytes(content[18:20], "little") != machine or
+                            environment.get("GOARCH") != architecture or environment.get("GOOS") != "linux"):
+                        raise ValueError(f"{name}: Go ELF architecture differs from linux/{architecture}")
+                    baseline_key, baseline_isa = ("GOAMD64", "v1") if architecture == "amd64" else ("GOARM64", "v8.0")
+                    if environment.get(baseline_key) != baseline_isa:
+                        raise ValueError(f"{name}: expected portable {baseline_key}={baseline_isa}")
                 programs[name] = {"go_version": version,
                                   "sha256": hashlib.sha256(content).hexdigest(),
-                                  "bytes": len(content)}
+                                  "bytes": len(content), "build_environment": environment}
         missing = GO_PROGRAMS - programs.keys()
         if missing:
             raise ValueError(f"missing required Go program build information: {sorted(missing)}")
@@ -135,7 +148,8 @@ def main():
     policy = json.loads(args.policy.read_text())
     baseline = json.loads(args.source_lock.read_text())["toolchains"]["golang"]
     packages = check_versions(args.manifest, policy)
-    programs = check_go_archive(args.rootfs, args.go_tool, baseline)
+    architecture = {"x86-64": "amd64", "cmcc-rax3000m": "arm64"}.get(args.target)
+    programs = check_go_archive(args.rootfs, args.go_tool, baseline, architecture)
     record = {"rootfs_sha256": sha256(args.rootfs),
               "manifest_sha256": sha256(args.manifest),
               "policy_sha256": sha256(args.policy),

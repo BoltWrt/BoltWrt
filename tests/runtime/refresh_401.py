@@ -32,6 +32,7 @@ class Case:
         self.results = {"status": "running", "steps": {}, "boot_ids": []}
         self.phase = "preflight"
         self.known = False
+        self.launched = False
         self.password = secrets.token_urlsafe(24)
 
     def save(self):
@@ -192,6 +193,7 @@ class Case:
                                  https_port=8444, restrict_network=True)
         self.phase = "launch"
         qemu.launch(launch)
+        self.launched = True
         self.save()
         qemu.save(args.case / "credentials.json", {"username": "root", "password": self.password})
         subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(args.case / "id_ed25519")], check=True)
@@ -199,7 +201,8 @@ class Case:
         command = "umask 077; mkdir -p /etc/dropbear; printf '%s\\n' " + shlex.quote(public) + " >> /etc/dropbear/authorized_keys"
         self.phase = "bootstrap"
         result = qemu.execute_serial(SimpleNamespace(case=args.case, command=command, command_file=None,
-            password_file=args.source_password_file, timeout=600, public_input=True), bytearray())
+            password_file=args.source_password_file, timeout=600, public_input=True,
+            label="refresh-401-public-key-bootstrap"), bytearray())
         qemu.save(args.evidence / "bootstrap.json", result)
         assert result["returncode"] == 0
         source_release = "4.0.0" if args.upgrade_image else "4.0.1"
@@ -280,7 +283,7 @@ def main():
         print(json.dumps({"status": "failed", "phase": case.phase, "error_type": type(error).__name__}), flush=True)
         return 1
     finally:
-        if (args.case / "qmp.sock").exists():
+        if case.launched and (args.case / "qmp.sock").exists():
             try:
                 qemu.quit_vm(SimpleNamespace(case=args.case))
             except (OSError, RuntimeError):
