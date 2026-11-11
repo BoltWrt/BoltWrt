@@ -24,6 +24,7 @@ make download -j4 V=s
 make -j2 V=s CONFIG_AUTOREMOVE=y
 python3 scripts/boltwrt-verify.py x86-64
 python3 scripts/boltwrt-software.py --build-root . --target x86-64
+python3 scripts/boltwrt-delivery.py --build-root . --target x86-64
 ```
 
 The pinned official Go image provides only the compiler seed in
@@ -33,6 +34,20 @@ ARM64 build hosts because the upstream Go 1.4 bootstrap cannot run there. It
 does not change the compiler used for firmware programs. The final software
 check reads Go build information from the actual rootfs ELF files and rejects
 a different compiler version.
+
+The delivery step creates `boltwrt-*-build.json`, `boltwrt-*-SHA256SUMS` and an
+`installed-packages.tar.gz` bundle next to the images. It selects the exact
+package versions installed in that image, signs delivery copies of the APKs
+with the build key, and verifies them with public keys extracted from the
+actual rootfs. Use these signed copies for standalone package uploads; OpenWrt's
+ordinary package output relies on signed repository indexes. The bundle
+contains public keys only. Keep the build private key in the private build
+workspace.
+
+Archive each target's images, delivery bundle, checksum file and `logs/boltwrt/`
+before switching configurations. `build.json` records the source commit,
+locked feeds, downstream patches and actual payload checks. Its scope is build
+and artifact verification; retain runtime results separately.
 
 The default OpenWrt bootstrap chain is still available on supported build hosts
 by omitting `--go-bootstrap-root`. Product selections are identical; compiler
