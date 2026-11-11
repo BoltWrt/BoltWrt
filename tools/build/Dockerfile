@@ -1,5 +1,6 @@
 # All compilation and runtime prerequisites stay inside this image.
 FROM python:3.12-slim-bookworm@sha256:6a0e06f5ba0b373d051aabd3fffb9b873f27f9a2a3a14bcbe37dee6f0e3bbc70 AS certificates
+FROM golang:1.26-bookworm@sha256:632dff7351799a5a9954a48dc06670ade72ee44e8c351cdc0e5a57af2fea21af AS go-bootstrap
 FROM ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852
 COPY --from=certificates /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 ARG APT_MIRROR=https://mirrors.ustc.edu.cn
@@ -17,6 +18,9 @@ RUN sed -i "s|http://ports.ubuntu.com|${APT_MIRROR}|g; s|http://archive.ubuntu.c
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 10000 builder \
     && useradd --uid 10000 --gid 10000 --create-home --shell /bin/bash builder
+# Seed only: OpenWrt builds the locked Go 1.27.4 compiler from source. Its
+# historical Go 1.4 -> 1.24 bootstrap chain does not support ARM64 build hosts.
+COPY --from=go-bootstrap /usr/local/go /opt/go-bootstrap
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8 GOPROXY=https://goproxy.cn,direct \
     GOSUMDB=sum.golang.google.cn CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse \
     GOMAXPROCS=3

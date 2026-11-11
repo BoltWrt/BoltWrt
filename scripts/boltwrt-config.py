@@ -98,6 +98,18 @@ def verify(target, release_tag=""):
                            if key.startswith("CONFIG_PACKAGE_") and value == "y"),
         "toolchain": {key: actual.get(key) for key in required},
     }
+    bootstrap_root = actual.get("CONFIG_GOLANG_EXTERNAL_BOOTSTRAP_ROOT", '""')
+    if bootstrap_root != '""':
+        directory = Path(json.loads(bootstrap_root)).resolve(strict=True)
+        if actual.get("CONFIG_GOLANG_BUILD_BOOTSTRAP", "n") != "n":
+            raise ValueError("external Go bootstrap requires GOLANG_BUILD_BOOTSTRAP disabled")
+        result = subprocess.run([str(directory / "bin/go"), "version"], check=True,
+                                capture_output=True, text=True)
+        match = re.fullmatch(r"go version go1\.(\d+)\.(\d+) linux/(amd64|arm64)\n?", result.stdout)
+        if not match or int(match[1]) < 24:
+            raise ValueError("Go 1.27 source build requires an external bootstrap >= Go 1.24")
+        record["go_bootstrap"] = {"root": str(directory), "version": result.stdout.strip(),
+                                  "scope": "compiler bootstrap only; not the firmware payload compiler"}
     log = ROOT / "logs/boltwrt"
     log.mkdir(parents=True, exist_ok=True)
     (log / f"{target}-config.json").write_text(json.dumps(record, indent=2) + "\n")
@@ -109,9 +121,15 @@ def main():
     parser.add_argument("target", choices=TARGETS)
     parser.add_argument("--check-only", action="store_true")
     parser.add_argument("--release-tag", default="", help="use the pushed tag as the firmware version")
+    parser.add_argument("--go-bootstrap-root", type=Path,
+                        help="external Linux Go >=1.24 seed; builds the locked payload compiler from source")
     args = parser.parse_args()
     if not args.check_only:
         values = requested(args.target, args.release_tag)
+        if args.go_bootstrap_root:
+            values["CONFIG_GOLANG_EXTERNAL_BOOTSTRAP_ROOT"] = json.dumps(
+                str(args.go_bootstrap_root.resolve(strict=True)))
+            values["CONFIG_GOLANG_BUILD_BOOTSTRAP"] = "n"
         text = "# Generated from config/version.txt, common.txt and the target fragment.\n"
         text += "\n".join(f"# {key} is not set" if value == "n" else f"{key}={value}"
                           for key, value in values.items()) + "\n"

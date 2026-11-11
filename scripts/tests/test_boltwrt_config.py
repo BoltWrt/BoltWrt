@@ -90,6 +90,27 @@ class ConfigTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "CONFIG_VERSION_NUMBER"):
             config.verify("x86-64")
 
+    def test_external_bootstrap_rejects_old_seed_and_the_legacy_chain(self):
+        self.verify(())
+        actual = self.root / ".config"
+        initial = actual.read_text()
+        directory = self.root / "bootstrap"
+        directory.mkdir()
+        configured = initial + 'CONFIG_GOLANG_EXTERNAL_BOOTSTRAP_ROOT=' + json.dumps(str(directory)) + '\n'
+        actual.write_text(configured + '# CONFIG_GOLANG_BUILD_BOOTSTRAP is not set\n')
+        with patch.object(config.subprocess, "run", return_value=subprocess.CompletedProcess(
+                [], 0, "go version go1.23.12 linux/arm64\n")):
+            with self.assertRaisesRegex(ValueError, ">= Go 1.24"):
+                config.verify("x86-64")
+        with patch.object(config.subprocess, "run", return_value=subprocess.CompletedProcess(
+                [], 0, "go version go1.26.10 linux/arm64\n")):
+            config.verify("x86-64")
+        record = json.loads((self.root / "logs/boltwrt/x86-64-config.json").read_text())
+        self.assertIn("go1.26.10", record["go_bootstrap"]["version"])
+        actual.write_text(configured + 'CONFIG_GOLANG_BUILD_BOOTSTRAP=y\n')
+        with self.assertRaisesRegex(ValueError, "GOLANG_BUILD_BOOTSTRAP disabled"):
+            config.verify("x86-64")
+
 
 if __name__ == "__main__":
     unittest.main()
