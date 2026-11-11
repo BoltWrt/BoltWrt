@@ -189,6 +189,11 @@ jobs:
           TARGET: ${{ inputs.target }}
         run: python3 scripts/boltwrt-verify.py "$TARGET" --release-tag "$BOLTWRT_RELEASE_TAG"
 
+      - name: Check packaged software and unified Go compiler
+        env:
+          TARGET: ${{ inputs.target }}
+        run: python3 scripts/boltwrt-software.py --build-root . --target "$TARGET"
+
       - name: Open debug session on requested manual failure
         if: ${{ failure() && inputs.debug_on_failure }}
         uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113 # v3
