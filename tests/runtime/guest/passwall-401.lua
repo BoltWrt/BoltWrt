@@ -77,6 +77,7 @@ if mode == "prepare" then
     local pin=assert(certificate:read("*a"):match("(%x+)%s*$")); certificate:close(); assert(#pin==64)
     put("passwall2", "bw401_xray_tls", "nodes", {type="Xray", protocol="vless", address="127.0.0.1", port="19105", uuid=uuid1, transport="tcp", encryption="none", tls="1", stream_security="tls", tls_serverName="boltwrt-upgrade-fixture.invalid", tls_CertSha=pin})
     put("passwall2", "bw401_singbox", "nodes", {type="sing-box", protocol="shadowsocks", address="127.0.0.1", port="19101", method="aes-128-gcm", password="fixture-sbss"})
+    put("passwall2", "bw401_ws", "nodes", {type="sing-box", protocol="vless", address="127.0.0.1", port="19100", uuid=uuid1, transport="ws", ws_path="/ws?token=a%2Fb", ws_maxEarlyData="2048", ws_earlyDataHeaderName="Sec-WebSocket-Protocol"})
     put("passwall2", "bw401_hysteria", "nodes", {type="Hysteria2", address="127.0.0.1", port="19102", hysteria2_auth_password="fixture-native", tls_serverName="boltwrt-upgrade-fixture.invalid", tls_allowInsecure="1"})
     put("passwall2", "bw401_ss", "nodes", {type="SS", address="127.0.0.1", port="19103", method="aes-128-gcm", password="fixture-ss"})
     put("passwall2", "bw401_ssr", "nodes", {type="SSR", address="127.0.0.1", port="19104", method="aes-128-cfb", password="fixture-ssr", protocol="origin", obfs="plain"})
@@ -103,6 +104,7 @@ elseif mode == "verify" then
                     local expected=value
                     if key == "transport" and section.type == "Xray" and value == "tcp" then expected="raw" end
                     if migrated and key == "protocol" and section.type == "Xray" and value == "dokodemo-door" then expected="tunnel" end
+                    if config == "passwall2" and id == "bw401_ws" and key == "ws_path" then expected="/ws?token=a%2Fb&ed=2048&eh=Sec-WebSocket-Protocol" end
                     assert(same(uci:get(config,id,key), expected), "preserved option differs: " .. id .. "." .. key)
                 end
             end
@@ -123,6 +125,7 @@ elseif mode == "verify" then
     assert(uci:get("passwall2_server",users[1],"uuid")==uuid1 and uci:get("passwall2_server",users[2],"uuid")==uuid2)
     assert(uci:get("passwall2_server","bw401_bw401_vless_1","password")=="existing-account-password")
     assert(uci:get("passwall2","bw401_xray_tls","tls_pinSHA256")==old:get("passwall2","bw401_xray_tls","tls_CertSha"), "Xray certificate pin was not migrated")
+    assert(uci:get("passwall2","bw401_singbox","ss_method")=="aes-128-gcm", "client cipher was not migrated")
     for _,case in ipairs({{"bw401_auth","fixture-auth"},{"bw401_naive","fixture-naive-pass"},{"bw401_anytls","fixture-anytls"},{"bw401_hy","YWJjAAE="},{"bw401_tuic","fixture-tuic"},{"bw401_sbhy2","fixture-sbhy2"}}) do
         local accounts=uci:get("passwall2_server",case[1],"users")
         assert(type(accounts)=="table" and #accounts==1, "missing migrated account: " .. case[1])
@@ -146,6 +149,9 @@ elseif mode == "generate" then
     local encoded=require("nixio").bin.b64encode(digest_bytes)
     assert(api.sha256_sb_xray(encoded)==digest_hex, "native NUL-containing certificate digest conversion failed")
     assert(api.sha256_xray_sb(digest_hex)==encoded, "native certificate digest roundtrip failed")
+    local websocket=require("luci.passwall2.util_sing-box").gen_outbound("bw401ws",api.uci_get_c("bw401_ws"))
+    assert(websocket.transport.path=="/ws?token=a%2Fb" and websocket.transport.max_early_data==2048)
+    assert(websocket.transport.early_data_header_name=="Sec-WebSocket-Protocol")
     local directory="/tmp/boltwrt-401-generated"
     assert(os.execute("umask 077; mkdir -p " .. directory)==0)
     local names={Xray="util_xray",["sing-box"]="util_sing-box",Hysteria2="util_hysteria2",SS="util_shadowsocks",SSR="util_shadowsocks",["SS-Rust"]="util_shadowsocks"}

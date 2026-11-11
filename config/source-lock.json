@@ -41,7 +41,7 @@
     "BoltWrt": {
       "type": "src-git",
       "url": "https://github.com/BoltWrt/Packages.git",
-      "commit": "9cbfc19d80a71407365234e1c01c8f1cf176509b",
+      "commit": "ffe4ca515043b0be0812d1d0dba888c95d47d9f3",
       "patch_manifest": "compat/openwrt-25.12.json"
     }
   },
