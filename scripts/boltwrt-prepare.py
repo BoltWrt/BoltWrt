@@ -85,7 +85,7 @@ PATCHES = {
              "\n")],
     },
     "packages": {
-        # The locked stable feed contains Go 1.26.10 and 1.27.4, including
+        # The locked stable feed contains Go 1.26.11 and 1.27.4, including
         # GO-2026-6809. Xray selects golang1.27/host; other packages retain
         # the stable feed's default compiler without a source rewrite.
         "net/nginx-util/src/nginx-ssl-util.hpp": [
