@@ -79,7 +79,7 @@ if mode == "prepare" then
     put("passwall2", "bw401_singbox", "nodes", {type="sing-box", protocol="shadowsocks", address="127.0.0.1", port="19101", method="aes-128-gcm", password="fixture-sbss"})
     put("passwall2", "bw401_ws", "nodes", {type="sing-box", protocol="vless", address="127.0.0.1", port="19100", uuid=uuid1, transport="ws", ws_path="/ws?token=a%2Fb", ws_maxEarlyData="2048", ws_earlyDataHeaderName="Sec-WebSocket-Protocol"})
     put("passwall2", "bw401_hysteria", "nodes", {type="Hysteria2", address="127.0.0.1", port="19102", hysteria2_auth_password="fixture-native", tls_serverName="boltwrt-upgrade-fixture.invalid", tls_allowInsecure="1"})
-    put("passwall2", "bw401_ss", "nodes", {type="SS", address="127.0.0.1", port="19103", method="aes-128-gcm", password="fixture-ss"})
+    put("passwall2", "bw401_ss", "nodes", {type="SS", address="127.0.0.1", port="19101", method="aes-128-gcm", password="fixture-sbss"})
     put("passwall2", "bw401_ssr", "nodes", {type="SSR", address="127.0.0.1", port="19104", method="aes-128-cfb", password="fixture-ssr", protocol="origin", obfs="plain"})
     uci:foreach("passwall2", "global", function(s) assert(uci:set("passwall2", s[".name"], "enabled", "0")) end)
     for _,config in ipairs({"passwall2","passwall2_server"}) do assert(uci:commit(config)) end
@@ -183,8 +183,10 @@ elseif mode == "generate" then
     write(directory .. "/client-singbox.json",require("luci.passwall2.util_sing-box").gen_config(options))
     options.node="bw401_hysteria"; options.local_socks_port=19082
     write(directory .. "/client-hysteria.json",require("luci.passwall2.util_hysteria2").gen_config(options))
+    write(directory .. "/client-ss-libev.json",require("luci.passwall2.util_shadowsocks").gen_config({
+        node="bw401_ss",local_addr="127.0.0.1",local_port=19085,mode="tcp_only"}))
     write(directory .. "/inventory.json",json.stringify(inventory,1))
-    print("PASS actual shipped generators: " .. #ids .. " upgraded servers and Xray/Sing-Box/native Hysteria2 clients, including a migrated TLS pin")
+    print("PASS actual shipped generators: " .. #ids .. " upgraded servers and Xray/Sing-Box/native Hysteria2/SS-libev clients, including a migrated TLS pin")
 else
     error("unexpected fixture mode")
 end
