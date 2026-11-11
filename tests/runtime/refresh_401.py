@@ -177,6 +177,18 @@ class Case:
             self.upload(GUEST / name, "/tmp/" + name)
         self.step(label + "-settings", f"sh /tmp/verify-upgrade-fixture.sh {self.args.intent} 4.0.1")
         self.step(label + "-passwall", "lua /tmp/passwall-401.lua verify")
+        self.step(label + "-migration-backup", """set -eu
+sysupgrade -l > /tmp/boltwrt-401-backup-list
+for name in passwall2 passwall2_server; do
+    path=/etc/boltwrt/migrations/4.0.1/$name
+    grep -Fx "$path" /tmp/boltwrt-401-backup-list >/dev/null
+    [ "$(ls -ldn "$path" | awk '{print $1, $3, $4}')" = '-rw------- 0 0' ]
+done
+for path in /etc/boltwrt /etc/boltwrt/migrations /etc/boltwrt/migrations/4.0.1; do
+    [ "$(ls -ldn "$path" | awk '{print $1, $3, $4}')" = 'drwx------ 0 0' ]
+done
+echo 'Private migration originals are included in ordinary sysupgrade backups.'
+""")
         state = self.step(label + "-identity-files", self.identity_command).decode()
         assert state == self.identity, "retained password/SSH identity changed"
         self.web(label + "-web", upgraded=True)
