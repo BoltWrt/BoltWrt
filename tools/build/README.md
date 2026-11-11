@@ -76,3 +76,8 @@ fresh-install, upgrade and optional rollback inputs. Keep its case and evidence
 directories private: they contain test passwords, keys and original backups.
 Keep the generated package manifest beside the candidate images; the runner
 compares every installed package version with it after boot and reboot.
+
+The [runtime acceptance guide](../../tests/runtime/README.md) describes the
+minimum BIOS/UEFI matrix, original-backup rollback, native ARM64 userland checks
+and isolated Chromium rendering. Keep these results alongside the exact
+candidate's build and package manifests.
