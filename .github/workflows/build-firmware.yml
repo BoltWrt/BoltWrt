@@ -58,10 +58,14 @@ jobs:
             platform=${artifact_dir#firmware/BoltWrt-Firmware_}
             tar -C "$artifact_dir" -czf "release/BoltWrt_${platform}_${GITHUB_REF_NAME}.tar.gz" .
           done
+          cd release
+          sha256sum BoltWrt_*.tar.gz > SHA256SUMS
 
       - name: Create release on an explicitly pushed version tag
         uses: softprops/action-gh-release@5113cdc90fd4d541c801c55356214017bf5ae34b # v3
         with:
           tag_name: ${{ github.ref_name }}
           name: BoltWrt ${{ github.ref_name }} Release
-          files: release/*.tar.gz
+          files: |
+            release/*.tar.gz
+            release/SHA256SUMS
