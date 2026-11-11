@@ -107,7 +107,7 @@ if [ "$(uci -q get system.ntp.enabled)" != 0 ]; then pidof ntpd >/dev/null; fi
         # beside the private case evidence, never in release artifacts.
         result = self.ssh("""set -eu
 set --
-for path in /tmp/boltwrt-401-generated /tmp/boltwrt-401-proxy.* /tmp/boltwrt-401-apk.* /tmp/boltwrt-401-idempotence.log; do
+for path in /tmp/boltwrt-401-generated /tmp/boltwrt-401-proxy.* /tmp/boltwrt-401-apk.* /tmp/boltwrt-401-acl.* /tmp/boltwrt-401-client-init.* /tmp/boltwrt-401-idempotence.log; do
     [ ! -e "$path" ] || set -- "$@" "$path"
 done
 [ "$#" -gt 0 ]
@@ -196,7 +196,7 @@ tar -czf - "$@"
         if not candidate:
             pages = pages[:1]
         if upgraded:
-            pages += [base + "node_config/bw401_hysteria", base + "node_config/bw401_ss", base + "node_config/bw401_xray_tls", base + "server_config/bw401_vless"]
+            pages += [base + "node_config/bw401_hysteria", base + "node_config/bw401_ss", base + "node_config/bw401_xray_tls", base + "server_config/bw401_vless", base + "acl_config/bw401_acl_global"]
         bodies = {}
         for number, page in enumerate(pages):
             code, _, body = self.http("GET", page, cookie=cookie)
@@ -236,6 +236,7 @@ tar -czf - "$@"
             self.upload(GUEST / name, "/tmp/" + name)
         self.step(label + "-settings", f"sh /tmp/verify-upgrade-fixture.sh {self.args.intent} 4.0.1")
         self.step(label + "-passwall", "lua /tmp/passwall-401.lua verify")
+        self.step(label + "-acl-policy", "lua /tmp/passwall-401.lua acl")
         self.step(label + "-migration-backup", """set -eu
 sysupgrade -l > /tmp/boltwrt-401-backup-list
 for name in passwall2 passwall2_server; do
@@ -307,6 +308,8 @@ echo 'Private migration originals are included in ordinary sysupgrade backups.'
             self.step("generate-core-configs", "umask 077; lua /tmp/passwall-401.lua generate")
             self.upload(GUEST / "proxy-401.sh", "/tmp/proxy-401.sh")
             self.step("local-proxy-and-tls", "sh /tmp/proxy-401.sh", timeout=360)
+            self.upload(GUEST / "client-init-401.sh", "/tmp/client-init-401.sh")
+            self.step("client-init-nft-dns-reload", "sh /tmp/client-init-401.sh", timeout=300)
             if args.apk:
                 self.upload(args.apk, "/tmp/boltwrt-translation.apk")
                 self.upload(GUEST / "apk-trust-401.sh", "/tmp/apk-trust-401.sh")

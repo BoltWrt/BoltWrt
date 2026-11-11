@@ -54,6 +54,13 @@ local proxy traffic and a wrong-certificate-pin rejection. Native Hysteria2 and
 SS-libev also run through the shipped PassWall2 client dispatcher. The signed
 translation APK is strictly verified, a tampered copy is rejected, and a native
 remove/reinstall transaction must preserve package inventory and trusted keys.
+Legacy ACL checks exercise global-off intent, dynamic inherited ports and
+shared/independent explicit nodes using the actual shipped ACL builder. The
+full x86 client init must install nftables rules without errors, carry HTTP and
+DNS traffic through local peers, survive a real dnsmasq reload and retain stable
+client/DNS processes. DNS fixtures use a locally answered subdomain of
+`example.com` and a public IPv4 answer; reserved `.test` names and documentation
+address ranges trigger normal core or rebinding protections.
 
 The optional rollback uses the original 4.0.0 image and its pre-upgrade backup
 with ordinary `sysupgrade -f BACKUP IMAGE`, then checks old configuration bytes,
@@ -75,6 +82,10 @@ root container with `--network none`, `--cap-drop ALL`,
 `tests/runtime/guest/`. Copy the private original-4.0.0 fixture archive and the
 matching signed translation APK into that container; do not relax permissions
 on host-owned private fixture files.
+
+With all capabilities dropped, root cannot read a host-owned mode-0600 file.
+Stream each private input through `docker exec -i` into a root-owned container
+file with `umask 077`; `docker cp` can retain the original host UID.
 
 ```sh
 sh /testtools/arm-401.sh /tmp/legacy-400-fixture.tar.gz FIXTURE_SHA256 \
@@ -111,7 +122,7 @@ docker run --rm --network container:QEMU_CONTAINER \
 ```
 
 Use an absolute project path for `PRIVATE_CASES` and a new browser output
-directory. The browser performs root login and renders eight Argon/PassWall2
+directory. The browser performs root login and renders nine Argon/PassWall2
 pages, captures screenshots and rejects uncaught JavaScript or failed local
 assets. It reads the accepted case's synthetic password. Only the test
 certificate's SPKI is allowed, after matching the certificate digest already

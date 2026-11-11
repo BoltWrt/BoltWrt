@@ -27,7 +27,7 @@ cleanup() {
     done
     printf '%s\n' "$result" > "$report/exit"
     set -- "$report"
-    for path in /tmp/boltwrt-401-generated /tmp/boltwrt-401-proxy.* /tmp/boltwrt-401-apk.* /tmp/boltwrt-401-idempotence.log /etc/boltwrt/migrations/4.0.1; do
+    for path in /tmp/boltwrt-401-generated /tmp/boltwrt-401-proxy.* /tmp/boltwrt-401-apk.* /tmp/boltwrt-401-acl.* /tmp/boltwrt-401-idempotence.log /etc/boltwrt/migrations/4.0.1; do
         [ ! -e "$path" ] || set -- "$@" "$path"
     done
     tar -czf /tmp/boltwrt-arm-401-evidence.tar.gz "$@" 2>/tmp/boltwrt-arm-401-tar.log || result=1
@@ -51,7 +51,7 @@ local function read(path) local f=assert(io.open(path,'rb'));local s=f:read('*a'
 local packages=assert(json.parse(read(directory .. '/packages.json')))
 local indexed={}
 for _,p in ipairs(packages) do assert(not indexed[p.name]); indexed[p.name]=p end
-assert(indexed['luci-app-passwall2'].version=='26.11.11-r2','wrong downstream PassWall2 release')
+assert(indexed['luci-app-passwall2'].version=='26.11.11-r3','wrong downstream PassWall2 release')
 local kernel=assert(indexed.kernel).version
 assert(kernel:match('^6%.12%.112~%x+%-r%d+$'),'unexpected packaged kernel ABI')
 local kmods=0
@@ -95,6 +95,7 @@ kill -0 "$rpcd_pid"
 
 sh /etc/uci-defaults/zz-passwall2-boltwrt-401 > "$report/migrate.log" 2>&1
 lua "$tools/passwall-401.lua" verify > "$report/migration-verify.log" 2>&1
+lua "$tools/passwall-401.lua" acl > "$report/acl-policy.log" 2>&1
 for name in passwall2 passwall2_server; do
     [ "$(ls -ldn "/etc/boltwrt/migrations/4.0.1/$name" | awk '{print $1, $3, $4}')" = '-rw------- 0 0' ]
 done

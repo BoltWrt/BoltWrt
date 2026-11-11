@@ -87,6 +87,7 @@ async function main() {
       ['native-ss-libev', service + 'node_config/bw401_ss'],
       ['migrated-xray-tls', service + 'node_config/bw401_xray_tls'],
       ['migrated-server', service + 'server_config/bw401_vless'],
+      ['migrated-acl', service + 'acl_config/bw401_acl_global'],
       ['shunt-rule-node', service + 'node_config/rulenode'],
     ];
     for (const [label, route] of pages) {

@@ -82,6 +82,8 @@ BoltWrt 集成了常用的 DNS、代理、流量管理和远程访问组件，�
 
 从 4.0.0 保留配置升级时，4.0.1 会转换 PassWall2 的旧服务端、账户和部分客户端字段，保留原 section、认证信息、证书路径和启停设置。转换前的两个原始配置保存在 `/etc/boltwrt/migrations/4.0.1/`，仅允许 root 访问；升级前仍应将完整的 4.0.0 配置备份保存到电脑。
 
+旧版访问控制规则也会转换为新版模式，继续保留全局开关、端口继承和指定节点的行为。在新版访问控制页面保存规则后，该规则按页面显示的新设置运行。
+
 使用自定义核心 JSON 的设备，应先按新核心支持的格式调整配置。Xray 新版本已移除旧 `proxySettings`，应使用 `streamSettings.sockopt.dialerProxy`。当前随附的 Sing-Box 1.14.4 可通过 PEM 证书配置信任自签名证书；证书指纹校验需要 Sing-Box 1.15 及以上版本。
 
 3.1.2 等旧版本请先按照 [4.0.0 升级说明](https://github.com/BoltWrt/BoltWrt/releases/tag/v4.0.0) 完成迁移。使用 Bootstrap 主题的设备应先切换到 Argon，OpenVPN 静态密钥配置应先迁移到 TLS 证书模式；额外软件需要准备匹配目标固件的 APK。

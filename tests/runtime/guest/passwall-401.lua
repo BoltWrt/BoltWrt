@@ -13,6 +13,7 @@ end
 local function put(config, id, kind, options)
     assert(not uci:get(config, id), "fixture section already exists")
     assert(uci:set(config, id, kind))
+    if kind == "nodes" and not options.remarks then options.remarks = "BoltWrt fixture " .. id end
     for key, value in pairs(options) do assert(uci:set(config, id, key, value)) end
 end
 local function release(expected)
@@ -81,6 +82,9 @@ if mode == "prepare" then
     put("passwall2", "bw401_hysteria", "nodes", {type="Hysteria2", address="127.0.0.1", port="19102", hysteria2_auth_password="fixture-native", tls_serverName="boltwrt-upgrade-fixture.invalid", tls_allowInsecure="1"})
     put("passwall2", "bw401_ss", "nodes", {type="SS", address="127.0.0.1", port="19101", method="aes-128-gcm", password="fixture-sbss"})
     put("passwall2", "bw401_ssr", "nodes", {type="SSR", address="127.0.0.1", port="19104", method="aes-128-cfb", password="fixture-ssr", protocol="origin", obfs="plain"})
+    put("passwall2", "bw401_acl_global", "acl_rule", {enabled="1",remarks="Inherited global fixture",node="default",sources="10.126.0.33 10.126.0.34",tcp_no_redir_ports="default",udp_no_redir_ports="disable"})
+    put("passwall2", "bw401_acl_node", "acl_rule", {enabled="0",remarks="Explicit node fixture",node="bw401_xray",sources="10.126.0.35",tcp_no_redir_ports="disable",tcp_redir_ports="443",remote_dns_protocol="udp",remote_dns="9.9.9.9:5353"})
+    put("passwall2", "bw401_acl_bypass", "acl_rule", {enabled="1",remarks="Bypass fixture",node="bw401_xray",sources="10.126.0.36",tcp_no_redir_ports="1:65535",udp_no_redir_ports="1:65535"})
     uci:foreach("passwall2", "global", function(s) assert(uci:set("passwall2", s[".name"], "enabled", "0")) end)
     for _,config in ipairs({"passwall2","passwall2_server"}) do assert(uci:commit(config)) end
     assert(os.execute("umask 077; mkdir -p " .. legacy .. "/state") == 0)
@@ -105,6 +109,9 @@ elseif mode == "verify" then
                     if key == "transport" and section.type == "Xray" and value == "tcp" then expected="raw" end
                     if migrated and key == "protocol" and section.type == "Xray" and value == "dokodemo-door" then expected="tunnel" end
                     if config == "passwall2" and id == "bw401_ws" and key == "ws_path" then expected="/ws?token=a%2Fb&ed=2048&eh=Sec-WebSocket-Protocol" end
+                    if config == "passwall2" and (section[".type"] == "global_forwarding" or section[".type"] == "acl_rule") and (key == "tcp_no_redir_ports" or key == "udp_no_redir_ports") and (value == "disable" or value == "default") then expected=nil end
+                    if config == "passwall2" and section[".type"] == "acl_rule" and key == "node" and value == "default" then expected=nil end
+                    if config == "passwall2" and section[".type"] == "acl_rule" and key == "sources" and type(value)=="string" then expected={};for source in value:gmatch("%S+") do expected[#expected+1]=source end end
                     assert(same(uci:get(config,id,key), expected), "preserved option differs: " .. id .. "." .. key)
                 end
             end
@@ -126,6 +133,15 @@ elseif mode == "verify" then
     assert(uci:get("passwall2_server","bw401_bw401_vless_1","password")=="existing-account-password")
     assert(uci:get("passwall2","bw401_xray_tls","tls_pinSHA256")==old:get("passwall2","bw401_xray_tls","tls_CertSha"), "Xray certificate pin was not migrated")
     assert(uci:get("passwall2","bw401_singbox","ss_method")=="aes-128-gcm", "client cipher was not migrated")
+    if old:get('passwall2','bw401_acl_global') then
+        assert(uci:get('passwall2','bw401_acl_global','mode')=='2')
+        assert(uci:get('passwall2','bw401_acl_global','boltwrt_401_legacy_acl')=='1')
+        assert(uci:get('passwall2','bw401_acl_global','tcp_redir_ports')=='1:65535')
+        assert(type(uci:get('passwall2','bw401_acl_global','boltwrt_401_inherit_ports'))=='table')
+        assert(uci:get('passwall2','bw401_acl_node','mode')=='1')
+        assert(uci:get('passwall2','bw401_acl_node','remote_dns_query_strategy')=='UseIPv4')
+        assert(uci:get('passwall2','bw401_acl_bypass','mode')=='0')
+    end
     for _,case in ipairs({{"bw401_auth","fixture-auth"},{"bw401_naive","fixture-naive-pass"},{"bw401_anytls","fixture-anytls"},{"bw401_hy","YWJjAAE="},{"bw401_tuic","fixture-tuic"},{"bw401_sbhy2","fixture-sbhy2"}}) do
         local accounts=uci:get("passwall2_server",case[1],"users")
         assert(type(accounts)=="table" and #accounts==1, "missing migrated account: " .. case[1])
@@ -149,6 +165,57 @@ elseif mode == "verify-rollback" then
     assert(uci:get("passwall2","bw401_xray","transport")=="tcp")
     assert(uci:get("passwall2","bw401_singbox","method")=="aes-128-gcm")
     print("PASS ordinary firmware rollback with the original 4.0.0 backup: native config bytes and legacy schema restored")
+elseif mode == "acl" then
+    release('4.0.1')
+    assert(uci:get('passwall2','bw401_acl_global','mode')=='2','use the fixture with legacy ACLs')
+    local json=require('luci.jsonc')
+    local original=read('/etc/config/passwall2')
+    local process=assert(io.popen('mktemp -d /tmp/boltwrt-401-acl.XXXXXX'))
+    local directory=assert(process:read('*l'));assert(process:close())
+    write(directory .. '/wrapper.lua',[[local api=require('luci.passwall2.api')
+api.TMP_ACL_PATH=assert(arg[1]);dofile('/usr/share/passwall2/app_acl.lua')]])
+    local function globals(enabled,node)
+        uci:foreach('passwall2','global',function(s)
+            assert(uci:set('passwall2',s['.name'],'enabled',enabled))
+            assert(uci:set('passwall2',s['.name'],'node',node))
+            assert(uci:set('passwall2',s['.name'],'acl_enable','1'))
+        end)
+        assert(uci:commit('passwall2'))
+    end
+    local function plan(label)
+        local prefix=directory .. '/' .. label
+        assert(os.execute('lua ' .. directory .. '/wrapper.lua ' .. prefix .. ' >' .. prefix .. '.json 2>' .. prefix .. '.log')==0,'shipped ACL builder failed: ' .. label)
+        return assert(json.parse(read(prefix .. '.json')))
+    end
+    local function rule(config,id)
+        for _,item in ipairs(config.acl) do if item.flag==id then return item end end
+    end
+    local ok,message=xpcall(function()
+        for _,id in ipairs({'bw401_xray','bw401_xray_tls'}) do
+            if not uci:get('passwall2',id,'remarks') then assert(uci:set('passwall2',id,'remarks','BoltWrt policy fixture ' .. id)) end
+        end
+        assert(uci:set('passwall2','bw401_acl_node','enabled','0'))
+        globals('0','bw401_xray_tls')
+        local disabled=plan('global-disabled')
+        assert(#disabled.node_order==0 and not rule(disabled,'bw401_acl_global'),'old inherited ACL unexpectedly started a proxy')
+        uci:foreach('passwall2','global_forwarding',function(s) assert(uci:set('passwall2',s['.name'],'tcp_redir_ports','443')) end)
+        globals('1','bw401_xray_tls')
+        local active=plan('global-active')
+        assert(#active.node_order==1 and rule(active,'bw401_acl_global').use=='acl_default')
+        assert(rule(active,'bw401_acl_global').tcp_redir_ports=='443','old global port inheritance was frozen')
+        assert(uci:set('passwall2','bw401_acl_node','enabled','1'))
+        globals('1','bw401_xray')
+        local shared=plan('same-explicit-node')
+        assert(#shared.node_order==1 and rule(shared,'bw401_acl_node').use=='acl_default','explicit matching node stopped sharing global config')
+        globals('0','bw401_xray')
+        local explicit=plan('explicit-with-global-off')
+        assert(#explicit.node_order==1 and explicit.node_order[1]=='bw401_acl_node')
+        assert(not rule(explicit,'bw401_acl_global'),'inherited ACL ran while global was off')
+    end,debug.traceback)
+    uci:revert('passwall2');write('/etc/config/passwall2',original);uci:unload('passwall2')
+    assert(read('/etc/config/passwall2')==original,'ACL checks changed fixture configuration')
+    assert(ok,message)
+    print('PASS native shipped ACL builder: disabled intent, live global port inheritance, shared and independent explicit nodes')
 elseif mode == "generate" then
     release("4.0.1")
     local json = require("luci.jsonc")
