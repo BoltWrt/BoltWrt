@@ -132,9 +132,12 @@ def stage(root, target):
                 add_bytes(archive, "packages.json", (json.dumps(inventory, indent=2) + "\n").encode())
         os.replace(temporary_bundle, bundle)
     prepared = json.loads((root / "logs/prepare-sources.json").read_text())
+    if prepared["source_lock_sha256"] != lock_hash:
+        raise ValueError("source preparation evidence differs from the current source lock")
     record = {
         "target": target, "version": images["version"],
         "source_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip(),
+        "delivery_tool_sha256": sha256(Path(__file__)),
         "source_lock_sha256": lock_hash, "source_lock": json.loads(lock_path.read_text()),
         "feeds": {name: {key: value for key, value in info.items() if key != "effective_url"}
                   for name, info in prepared["feeds"].items()},
