@@ -69,14 +69,19 @@ proxy() {
 }
 dispatcher() {
     local name=$1 node=$2 port=$3
-    local directory=/tmp/etc/passwall2 config log success body command_line
+    local directory=/tmp/etc/passwall2 config log success body command_line dispatched=0
     config=$directory/boltwrt-401-$name.json
     log=$directory/boltwrt-401-$name.log
     mkdir -p "$directory/bin" "$directory/script_func" /tmp/log
     sha256sum /etc/config/passwall2 > "$temporary/$name.before-config"
     NO_REC_PROCESS=1 sh /usr/share/passwall2/app.sh run_socks \
         flag=boltwrt401dispatch node="$node" bind=127.0.0.1 socks_port="$port" \
-        config_file="$config" log_file="$log" > "$temporary/$name.dispatch.log" 2>&1
+        http_port=0 config_file="$config" log_file="$log" > "$temporary/$name.dispatch.log" 2>&1 || dispatched=$?
+    # run_socks ends with conditional direct-node registration. A loopback
+    # peer returns 1 there even after launching successfully. Establish success
+    # from its exact generated config, live process and real proxied response.
+    printf 'DISPATCH_EXIT=%s\n' "$dispatched" >> "$temporary/$name.dispatch.log"
+    [ "$dispatched" = 0 ] || [ "$dispatched" = 1 ]
     [ -s "$config" ]
     cp "$config" "$temporary/$name.config.json"
     success=0
