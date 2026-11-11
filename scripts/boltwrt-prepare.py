@@ -85,9 +85,10 @@ PATCHES = {
              "\n")],
     },
     "packages": {
-        # The locked stable feed contains Go 1.26.11 and 1.27.4, including
-        # GO-2026-6809. Xray selects golang1.27/host; other packages retain
-        # the stable feed's default compiler without a source rewrite.
+        # Build every Go payload with the same patched compiler. Explicit
+        # golang1.27/host dependencies resolve to this same compiler instance.
+        "lang/golang/golang-values.mk": [
+            ("GO_DEFAULT_VERSION:=1.26\n", "GO_DEFAULT_VERSION:=1.27\n")],
         "net/nginx-util/src/nginx-ssl-util.hpp": [
             ("/C=ZZ/ST=Somewhere/L=None/CN=OpenWrt/O=OpenWrt",
              "/C=CN/ST=Beijing/L=Beijing/CN=BoltWrt/O=BoltWrt"),
@@ -356,6 +357,26 @@ def positive_package_choices(root):
     return choices
 
 
+def verify_toolchains(root, lock):
+    """Reject a default compiler that differs from the declared build baseline."""
+    version = lock.get("toolchains", {}).get("golang")
+    if version is None:
+        return {}
+    if not isinstance(version, str) or not re.fullmatch(r"1\.[0-9]+\.[0-9]+", version):
+        raise PrepareError("invalid locked Go compiler version")
+    series, patch = version.rsplit(".", 1)
+    base = root / "feeds/packages/lang/golang"
+    values = (base / "golang-values.mk").read_text()
+    defaults = re.findall(r"^GO_DEFAULT_VERSION:=(.+)$", values, re.M)
+    recipe = (base / ("golang" + series) / "Makefile").read_text()
+    major_minor = re.findall(r"^GO_VERSION_MAJOR_MINOR:=(.+)$", recipe, re.M)
+    patches = re.findall(r"^GO_VERSION_PATCH:=(.+)$", recipe, re.M)
+    if defaults != [series] or major_minor != [series] or patches != [patch]:
+        raise PrepareError(f"Go compiler differs from locked unified baseline {version}")
+    return {"golang": {"version": version, "default_series": series,
+                       "recipe_sha256": hashlib.sha256(recipe.encode()).hexdigest()}}
+
+
 def product_roots(indexes, winners, choices):
     return {source: feed for source, feed in winners.items()
             if feed == "BoltWrt" or indexes[feed][source] & choices}
@@ -486,6 +507,7 @@ def prepare(root, local_feed=None):
             if path.read_bytes() != content:
                 atomic_write(path, content)
             patch_hashes[str(path.relative_to(root))] = hashlib.sha256(content).hexdigest()
+    toolchains = verify_toolchains(root, lock)
     env, failures = make_environment(root)
     # feeds update -i can itself run make defconfig. Reject stray build sources
     # before that first metadata scan, then tighten to the actual feed indexes.
@@ -512,6 +534,7 @@ def prepare(root, local_feed=None):
     installed = {source: feed for source, feed in winners.items()
                  if (root / "package/feeds" / feed / Path(source).name).is_symlink()}
     evidence = {"source_lock_sha256": hashlib.sha256(lock_path.read_bytes()).hexdigest(),
+                "toolchains": toolchains,
                 "feeds": records, "patched_files_sha256": patch_hashes,
                 "registration_scope": scope, "requested_root_providers": roots,
                 "selected_providers": installed, "excluded_overlapping_sources": rejected}

@@ -21,6 +21,23 @@ class PrepareTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
+    def test_go_compiler_must_match_the_unified_locked_baseline(self):
+        base = self.root / "feeds/packages/lang/golang"
+        (base / "golang1.27").mkdir(parents=True)
+        values = base / "golang-values.mk"
+        recipe = base / "golang1.27/Makefile"
+        values.write_text("GO_DEFAULT_VERSION:=1.27\n")
+        recipe.write_text("GO_VERSION_MAJOR_MINOR:=1.27\nGO_VERSION_PATCH:=4\n")
+        lock = {"toolchains": {"golang": "1.27.4"}}
+        self.assertEqual(prepare.verify_toolchains(self.root, lock)["golang"]["version"], "1.27.4")
+        values.write_text("GO_DEFAULT_VERSION:=1.26\n")
+        with self.assertRaisesRegex(prepare.PrepareError, "unified baseline"):
+            prepare.verify_toolchains(self.root, lock)
+        values.write_text("GO_DEFAULT_VERSION:=1.27\n")
+        recipe.write_text("GO_VERSION_MAJOR_MINOR:=1.27\nGO_VERSION_PATCH:=3\n")
+        with self.assertRaisesRegex(prepare.PrepareError, "unified baseline"):
+            prepare.verify_toolchains(self.root, lock)
+
     def repo(self):
         repo = self.root / "repo"
         repo.mkdir()
