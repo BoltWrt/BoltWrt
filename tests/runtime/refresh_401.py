@@ -113,6 +113,23 @@ tar -czf - "$@"
         }
         self.save()
 
+    def verify_packages(self, label):
+        directory = (self.args.upgrade_image or self.args.source).parent
+        manifests = list(directory.glob("boltwrt-*.manifest"))
+        assert len(manifests) == 1 and not manifests[0].is_symlink(), "keep the built manifest beside the candidate image"
+        expected = {}
+        content = manifests[0].read_bytes()
+        for line in content.decode().splitlines():
+            name, separator, version = line.partition(" - ")
+            assert separator and name and version and name not in expected
+            expected[name] = version
+        output = self.step(label, "apk --no-network --repositories-file /dev/null query --from installed --installed --format json --fields name,version '*'")
+        packages = json.loads(output)
+        actual = {package["name"]: package["version"] for package in packages}
+        assert len(actual) == len(packages) and actual == expected, "running image package versions differ from its manifest"
+        self.results["steps"][label].update(packages=len(actual), manifest_sha256=hashlib.sha256(content).hexdigest())
+        self.save()
+
     def http(self, method, path, data=None, cookie=None):
         connection = http.client.HTTPSConnection("127.0.0.1", 8444, context=self.context, timeout=90)
         headers = {}
@@ -205,6 +222,7 @@ tar -czf - "$@"
         print(label + ": passed", flush=True)
 
     def verify_upgrade(self, label):
+        self.verify_packages(label + "-packages")
         for name in ("verify-upgrade-fixture.sh", "passwall-401.lua"):
             self.upload(GUEST / name, "/tmp/" + name)
         self.step(label + "-settings", f"sh /tmp/verify-upgrade-fixture.sh {self.args.intent} 4.0.1")
@@ -286,6 +304,7 @@ echo 'Private migration originals are included in ordinary sysupgrade backups.'
                 self.step("native-apk-trust", "sh /tmp/apk-trust-401.sh /tmp/boltwrt-translation.apk", timeout=180)
             self.capture_runtime("before-reboot")
         else:
+            self.verify_packages("fresh-packages")
             self.upload(GUEST / "verify-fresh.sh", "/tmp/verify-fresh.sh")
             self.step("fresh-local", "sh /tmp/verify-fresh.sh x86/64 4.0.1")
             self.web("fresh-web", upgraded=False)
@@ -296,6 +315,7 @@ echo 'Private migration originals are included in ordinary sysupgrade backups.'
         if args.upgrade_image:
             self.verify_upgrade("after-reboot")
         else:
+            self.verify_packages("rebooted-fresh-packages")
             self.upload(GUEST / "verify-fresh.sh", "/tmp/verify-fresh.sh")
             self.step("rebooted-fresh-local", "sh /tmp/verify-fresh.sh x86/64 4.0.1")
             self.web("rebooted-fresh-web", upgraded=False)

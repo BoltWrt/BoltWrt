@@ -74,3 +74,5 @@ if using a different local tag. This step installs no additional packages.
 Run `tests/runtime/refresh_401.py --help` inside the runtime container for the
 fresh-install, upgrade and optional rollback inputs. Keep its case and evidence
 directories private: they contain test passwords, keys and original backups.
+Keep the generated package manifest beside the candidate images; the runner
+compares every installed package version with it after boot and reboot.
