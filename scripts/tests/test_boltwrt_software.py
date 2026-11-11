@@ -9,6 +9,22 @@ spec.loader.exec_module(software)
 
 
 class SoftwareTests(unittest.TestCase):
+    def test_rootfs_alias_must_match_and_cannot_hide_stale_outputs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            canonical = directory / "boltwrt-4.0.1-x86-64-generic-rootfs.tar.gz"
+            alias = directory / "boltwrt-4.0.1-x86-64-generic-targz-rootfs.tar.gz"
+            canonical.write_bytes(b"actual archive selection fixture")
+            alias.write_bytes(canonical.read_bytes())
+            self.assertEqual(software.rootfs_archive(directory), canonical)
+            alias.write_bytes(b"different cohort")
+            with self.assertRaisesRegex(ValueError, "alias differs"):
+                software.rootfs_archive(directory)
+            alias.write_bytes(canonical.read_bytes())
+            (directory / "boltwrt-4.0.0-x86-64-generic-rootfs.tar.gz").write_bytes(canonical.read_bytes())
+            with self.assertRaisesRegex(ValueError, "one regular canonical"):
+                software.rootfs_archive(directory)
+
     def test_manifest_rejects_stale_payload_version_and_duplicate_entries(self):
         policy = {name: {"version": "1.2.3"} for name in software.VERSION_PACKAGES}
         policy.update(geoip="202611050019", geosite="202611102204", tuic={"version": "1.8.11"})

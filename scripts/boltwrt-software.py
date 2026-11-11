@@ -28,6 +28,19 @@ def sha256(path):
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
+def rootfs_archive(directory):
+    candidates = [path for path in directory.glob("boltwrt-*-rootfs.tar.gz")
+                  if not path.name.endswith("-targz-rootfs.tar.gz")]
+    if len(candidates) != 1 or candidates[0].is_symlink():
+        raise ValueError("expected one regular canonical rootfs archive")
+    rootfs = candidates[0]
+    expected_alias = rootfs.with_name(rootfs.name.removesuffix("-rootfs.tar.gz") + "-targz-rootfs.tar.gz")
+    for alias in directory.glob("boltwrt-*-targz-rootfs.tar.gz"):
+        if alias != expected_alias or alias.is_symlink() or sha256(alias) != sha256(rootfs):
+            raise ValueError("rootfs alias differs from the canonical archive")
+    return rootfs
+
+
 def check_versions(manifest, policy):
     packages = {}
     for line in Path(manifest).read_text().splitlines():
@@ -130,7 +143,7 @@ def main():
             if len(matches) != 1:
                 raise ValueError(f"expected one {pattern} in {directory}, found {len(matches)}")
             return matches[0]
-        args.rootfs = args.rootfs or unique("boltwrt-*-rootfs.tar.gz")
+        args.rootfs = args.rootfs or rootfs_archive(directory)
         args.manifest = args.manifest or unique("boltwrt-*.manifest")
         args.policy = args.policy or root / "feeds/BoltWrt/compat/software-lock.json"
         args.source_lock = args.source_lock or root / "config/source-lock.json"
@@ -150,7 +163,7 @@ def main():
     packages = check_versions(args.manifest, policy)
     architecture = {"x86-64": "amd64", "cmcc-rax3000m": "arm64"}.get(args.target)
     programs = check_go_archive(args.rootfs, args.go_tool, baseline, architecture)
-    record = {"rootfs_sha256": sha256(args.rootfs),
+    record = {"rootfs": args.rootfs.name, "rootfs_sha256": sha256(args.rootfs),
               "manifest_sha256": sha256(args.manifest),
               "policy_sha256": sha256(args.policy),
               "source_lock_sha256": sha256(args.source_lock),

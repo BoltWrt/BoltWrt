@@ -78,14 +78,17 @@ def stage(root, target):
     for name, expected in images["images"].items():
         if PurePosixPath(name).name != name or sha256(directory / name) != expected["sha256"]:
             raise ValueError(f"verified image has changed: {name}")
-    roots = list(directory.glob("boltwrt-*-rootfs.tar.gz"))
+    rootfs_name = software["rootfs"]
+    if PurePosixPath(rootfs_name).name != rootfs_name:
+        raise ValueError("invalid checked rootfs archive name")
+    rootfs = directory / rootfs_name
     manifests = list(directory.glob("boltwrt-*.manifest"))
-    if len(roots) != 1 or len(manifests) != 1:
-        raise ValueError("expected one actual rootfs and package manifest")
-    if sha256(roots[0]) != software["rootfs_sha256"] or sha256(manifests[0]) != software["manifest_sha256"]:
+    if rootfs.is_symlink() or not rootfs.is_file() or len(manifests) != 1:
+        raise ValueError("expected a checked actual rootfs and one package manifest")
+    if sha256(rootfs) != software["rootfs_sha256"] or sha256(manifests[0]) != software["manifest_sha256"]:
         raise ValueError("checked rootfs or manifest has changed")
     archives = package_files(root, target, images["packages"])
-    keys = public_keys(roots[0])
+    keys = public_keys(rootfs)
     prefix = f"boltwrt-{images['version']}-{target}"
     bundle = directory / (prefix + "-installed-packages.tar.gz")
     with tempfile.TemporaryDirectory(prefix="boltwrt-delivery-", dir=root / "tmp") as temporary:
