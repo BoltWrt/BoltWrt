@@ -107,6 +107,16 @@ BoltWrt 集成了常用的 DNS、代理、流量管理和远程访问组件，�
 
 需要回退到 4.0.0 时，使用对应平台的原版升级镜像，并恢复升级前保存的 4.0.0 备份。新版 PassWall2 转换后的服务端配置应与新版固件配套使用。
 
+通过 SSH 回退时，可在刷写原版镜像的同时指定原始备份。先将两个文件上传到 `/tmp`，替换下面的示例文件名，再执行；RAX 使用对应的 `.itb` 升级镜像。
+
+```sh
+BOLTWRT_IMAGE='/tmp/firmware-4.0.0.img.gz'
+BOLTWRT_BACKUP='/tmp/backup-4.0.0.tar.gz'
+sysupgrade -T "$BOLTWRT_IMAGE" && sysupgrade -f "$BOLTWRT_BACKUP" "$BOLTWRT_IMAGE"
+```
+
+小写 `-f` 指定要恢复的备份。这样首次启动 4.0.0 时即可使用升级前的配置。
+
 RAX3000M / RAX3000Me 的 `-initramfs-recovery.itb` 用于启动精简恢复环境。正常升级使用 `-squashfs-sysupgrade.itb`。若设备无法正常启动，请按与自身闪存、内存类型及引导方式相符的步骤恢复。 [OpenWrt 设备指南](https://openwrt.org/toh/cmcc/rax3000m)
 
 ## ❓ 常见问题
