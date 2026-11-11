@@ -109,10 +109,14 @@ def stage(root, target):
         for name, path in archives.items():
             copies[name] = copy_dir / name
             shutil.copyfile(path, copies[name])
-        signed = subprocess.run([str(apk), "adbsign", "--allow-untrusted", "--reset-signatures", "--sign-key", str(signing_key),
-                                 *map(str, copies.values())], capture_output=True, text=True)
-        if signed.returncode:
-            raise ValueError("standalone delivery APK signing failed:\n" + signed.stdout + signed.stderr)
+        # apk-tools 3.0.5's multi-file adbsign invocation produced a valid
+        # signature only for its first input in native artifact validation.
+        # A fresh signing process per file avoids sharing that signer state.
+        for name, path in copies.items():
+            signed = subprocess.run([str(apk), "adbsign", "--allow-untrusted", "--reset-signatures", "--sign-key", str(signing_key),
+                                     str(path)], capture_output=True, text=True)
+            if signed.returncode:
+                raise ValueError(f"standalone delivery APK signing failed for {name}:\n" + signed.stdout + signed.stderr)
         verify = subprocess.run([str(apk), "--no-network", "--repositories-file", "/dev/null",
                                  "--keys-dir", str(key_dir), "verify", *map(str, copies.values())],
                                 capture_output=True, text=True)
