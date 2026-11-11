@@ -106,6 +106,15 @@ Image checks separately validate the RAX FIT images and all NAND/eMMC,
 DDR3/DDR4 boot assets. Docker userland testing does not boot a RAX kernel, load
 modules, write flash, or validate physical Ethernet/Wi-Fi.
 
+Use the original 4.0.0 ARM rootfs for the upgrade-image entry check:
+`legacy-rax-image-check.sh IMAGE SHA256` runs the original `sysupgrade -T`,
+retains its metadata output and requires rejection after changing only the
+board-name fixture. Run it first with the official 4.0.0 sysupgrade FIT as a
+positive control, then with the candidate FIT. A read-only Docker rootfs and
+writable `/tmp` are sufficient. The fixture supplies `cmcc,rax3000m`; it does
+not emulate board hardware or execute a flash operation. Preserve the process
+exit and output for both images.
+
 ## Browser rendering
 
 Build `tools/build/Dockerfile.browser` using the project-local buildx path.
