@@ -60,7 +60,18 @@ class Case:
 
     def ready(self, release, previous=None):
         deadline = time.monotonic() + 900
-        command = "cat /proc/sys/kernel/random/boot_id; . /etc/openwrt_release; printf '%s\\n' \"$DISTRIB_RELEASE\"; ubus call system board >/dev/null"
+        # Dropbear starts before nginx and sysntpd. Waiting for SSH alone can
+        # inspect an unfinished first boot before init's persistence sync.
+        # sysntpd is S98; its service registration also exists when the retained
+        # configuration intentionally disables NTP.
+        command = """set -e
+cat /proc/sys/kernel/random/boot_id
+. /etc/openwrt_release
+printf '%s\\n' "$DISTRIB_RELEASE"
+ubus call system board >/dev/null
+ubus call service list '{"name":"sysntpd"}' | jsonfilter -e '@.sysntpd' | grep -q .
+if [ "$(uci -q get system.ntp.enabled)" != 0 ]; then pidof ntpd >/dev/null; fi
+"""
         while time.monotonic() < deadline:
             try:
                 result = self.ssh(command, timeout=12)
@@ -351,6 +362,13 @@ def main():
         return 1
     finally:
         if case.launched and (args.case / "qmp.sock").exists():
+            if case.known:
+                try:
+                    synced = case.ssh("sync", timeout=20)
+                    case.results["cleanup_sync_returncode"] = synced.returncode
+                    case.save()
+                except (OSError, subprocess.TimeoutExpired):
+                    pass
             try:
                 qemu.quit_vm(SimpleNamespace(case=args.case))
             except (OSError, RuntimeError):
