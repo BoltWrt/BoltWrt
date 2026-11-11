@@ -55,6 +55,9 @@ def check_versions(manifest, policy):
             actual = packages.get(name)
             if actual is None or actual.split("-r", 1)[0] != expected:
                 raise ValueError(f"{name}: expected {expected}, found {actual}")
+            release = policy[component].get("release")
+            if release is not None and actual != f"{expected}-r{release}":
+                raise ValueError(f"{name}: expected downstream release {expected}-r{release}, found {actual}")
             checked[name] = actual
     for component in ("geoip", "geosite"):
         name = "v2ray-" + component

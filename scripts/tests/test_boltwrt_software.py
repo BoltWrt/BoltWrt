@@ -9,6 +9,20 @@ spec.loader.exec_module(software)
 
 
 class SoftwareTests(unittest.TestCase):
+    def test_manifest_requires_the_fixed_downstream_package_release(self):
+        policy = {name: {"version": "1.2.3"} for name in software.VERSION_PACKAGES}
+        policy["passwall2"]["release"] = 2
+        policy.update(geoip="202611050019", geosite="202611102204")
+        entries = [f"{package} - 1.2.3-r1" for names in software.VERSION_PACKAGES.values() for package in names]
+        entries += ["v2ray-geoip - 202611050019.1", "v2ray-geosite - 202611102204.1"]
+        with tempfile.TemporaryDirectory() as directory:
+            manifest = Path(directory) / "manifest"
+            manifest.write_text("\n".join(entries))
+            with self.assertRaisesRegex(ValueError, "downstream release"):
+                software.check_versions(manifest, policy)
+            manifest.write_text("\n".join(entries).replace("luci-app-passwall2 - 1.2.3-r1", "luci-app-passwall2 - 1.2.3-r2"))
+            self.assertEqual(software.check_versions(manifest, policy)["luci-app-passwall2"], "1.2.3-r2")
+
     def test_rootfs_alias_must_match_and_cannot_hide_stale_outputs(self):
         with tempfile.TemporaryDirectory() as directory:
             directory = Path(directory)

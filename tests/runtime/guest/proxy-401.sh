@@ -2,6 +2,7 @@
 # Real loopback peers, shipped generators and init script, in a disposable guest.
 set -eu
 umask 077
+case "${1:-}" in '') run_all=1;; --tls-pin-only) run_all=0;; *) echo 'usage: proxy-401.sh [--tls-pin-only]' >&2; exit 2;; esac
 [ "$(id -u)" = 0 ]
 [ -f /root/boltwrt-upgrade-fixture/legacy-400/passwall2_server ]
 . /etc/openwrt_release
@@ -66,11 +67,15 @@ proxy() {
     kill "$client_pid"; wait "$client_pid" 2>/dev/null || :; client_pid=
     echo "PROXY_PASSED=$name"
 }
-proxy xray-vless 19080 /usr/bin/xray run -c "$directory/client-xray.json"
-proxy singbox-shadowsocks 19081 /usr/bin/sing-box run -c "$directory/client-singbox.json"
-proxy native-hysteria2 19082 /usr/bin/hysteria -c "$directory/client-hysteria.json" client
+if [ "$run_all" = 1 ]; then
+    proxy xray-vless 19080 /usr/bin/xray run -c "$directory/client-xray.json"
+    proxy singbox-shadowsocks 19081 /usr/bin/sing-box run -c "$directory/client-singbox.json"
+    proxy native-hysteria2 19082 /usr/bin/hysteria -c "$directory/client-hysteria.json" client
+fi
 proxy xray-migrated-certificate-pin 19083 /usr/bin/xray run -c "$directory/client-xray-tls.json"
-proxy upgraded-ss-libev 19085 /usr/bin/ss-local -c "$directory/client-ss-libev.json"
+if [ "$run_all" = 1 ]; then
+    proxy upgraded-ss-libev 19085 /usr/bin/ss-local -c "$directory/client-ss-libev.json"
+fi
 
 # The negative control differs only in the certificate pin and local SOCKS port.
 lua - <<'LUA'

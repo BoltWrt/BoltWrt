@@ -185,7 +185,9 @@ elseif mode == "generate" then
     local options={flag="bw401",node="bw401_xray",no_run=true,local_socks_address="127.0.0.1",local_socks_port=19080,dns_listen_port=15353,direct_dns_udp_server="127.0.0.1",direct_dns_udp_port=53,direct_dns_query_strategy="UseIP",remote_dns_tcp_server="127.0.0.1",remote_dns_tcp_port=53,remote_dns_query_strategy="UseIP",remote_dns_detour="remote",dns_cache="1"}
     write(directory .. "/client-xray.json",require("luci.passwall2.util_xray").gen_config(options))
     options.node="bw401_xray_tls"; options.flag="bw401tls"; options.local_socks_port=19083
+    options.loglevel="debug"
     write(directory .. "/client-xray-tls.json",require("luci.passwall2.util_xray").gen_config(options))
+    options.loglevel=nil
     options.node="bw401_singbox"; options.flag="bw401sb"; options.local_socks_port=19081
     write(directory .. "/client-singbox.json",require("luci.passwall2.util_sing-box").gen_config(options))
     options.node="bw401_hysteria"; options.local_socks_port=19082
