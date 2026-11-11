@@ -1,5 +1,5 @@
 {
-  "version": "4.0.0",
+  "version": "4.0.1",
   "upstream": {
     "url": "https://github.com/openwrt/openwrt.git",
     "tag": "v25.12.6",
@@ -13,22 +13,22 @@
     "packages": {
       "type": "src-git",
       "url": "https://git.openwrt.org/feed/packages.git",
-      "commit": "093d551675b1119a06ef224d419905e8d6b2af1a"
+      "commit": "a00e5a51e670f2e3a2d949006e28be45acb789ff"
     },
     "luci": {
       "type": "src-git",
       "url": "https://git.openwrt.org/project/luci.git",
-      "commit": "75a306df84a020c57a631ef5b4c02ace56d93387"
+      "commit": "b2e0be4b46ec0fd43394c081fa7c50657af14011"
     },
     "routing": {
       "type": "src-git",
       "url": "https://git.openwrt.org/feed/routing.git",
-      "commit": "48c808034414a2112cf9d5261a20a320e8d0d170"
+      "commit": "625f9d8446807708bab4eef26cdc44692164818a"
     },
     "telephony": {
       "type": "src-git",
       "url": "https://git.openwrt.org/feed/telephony.git",
-      "commit": "2618106d5846a4a542fdf5809f0d3ed228ce439b"
+      "commit": "c58ec5a6703966dcccb53d0919698c8aba3a9ef5"
     },
     "video": {
       "type": "src-git",
