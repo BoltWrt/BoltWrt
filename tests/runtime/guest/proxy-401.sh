@@ -67,6 +67,39 @@ proxy() {
     kill "$client_pid"; wait "$client_pid" 2>/dev/null || :; client_pid=
     echo "PROXY_PASSED=$name"
 }
+dispatcher() {
+    local name=$1 node=$2 port=$3
+    local directory=/tmp/etc/passwall2 config log success body command_line
+    config=$directory/boltwrt-401-$name.json
+    log=$directory/boltwrt-401-$name.log
+    mkdir -p "$directory/bin" "$directory/script_func" /tmp/log
+    sha256sum /etc/config/passwall2 > "$temporary/$name.before-config"
+    NO_REC_PROCESS=1 sh /usr/share/passwall2/app.sh run_socks \
+        flag=boltwrt401dispatch node="$node" bind=127.0.0.1 socks_port="$port" \
+        config_file="$config" log_file="$log" > "$temporary/$name.dispatch.log" 2>&1
+    [ -s "$config" ]
+    cp "$config" "$temporary/$name.config.json"
+    success=0
+    for attempt in 1 2 3 4 5 6 7 8 9 10; do
+        for command_line in /proc/[0-9]*/cmdline; do
+            [ -r "$command_line" ] || continue
+            if tr '\000' '\n' < "$command_line" 2>/dev/null | grep -Fx "$config" >/dev/null; then
+                client_pid=${command_line#/proc/}; client_pid=${client_pid%/cmdline}
+                break
+            fi
+        done
+        if [ -n "$client_pid" ] && body=$(curl --noproxy '' -sf --max-time 5 --socks5-hostname "127.0.0.1:$port" "$url" 2> "$temporary/$name.curl.log"); then
+            [ "$body" = "$expected" ]; success=1; break
+        fi
+        sleep 1
+    done
+    [ ! -f "$log" ] || cp "$log" "$temporary/$name.client.log"
+    [ "$success" = 1 ] || { echo "DISPATCH_FAILED=$name" >&2; return 1; }
+    kill "$client_pid"; client_pid=
+    sha256sum /etc/config/passwall2 > "$temporary/$name.after-config"
+    cmp -s "$temporary/$name.before-config" "$temporary/$name.after-config"
+    echo "PROXY_PASSED=dispatcher-$name"
+}
 if [ "$run_all" = 1 ]; then
     proxy xray-vless 19080 /usr/bin/xray run -c "$directory/client-xray.json"
     proxy singbox-shadowsocks 19081 /usr/bin/sing-box run -c "$directory/client-singbox.json"
@@ -75,6 +108,8 @@ fi
 proxy xray-migrated-certificate-pin 19083 /usr/bin/xray run -c "$directory/client-xray-tls.json"
 if [ "$run_all" = 1 ]; then
     proxy upgraded-ss-libev 19085 /usr/bin/ss-local -c "$directory/client-ss-libev.json"
+    dispatcher native-hysteria2 bw401_hysteria 19086
+    dispatcher ss-libev bw401_ss 19087
 fi
 
 # The negative control differs only in the certificate pin and local SOCKS port.
