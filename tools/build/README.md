@@ -59,3 +59,18 @@ limits and build concurrency should leave memory for other local workloads.
 Runtime verification uses disposable disks derived from the official 4.0.0
 release, followed by ordinary, configuration-preserving `sysupgrade` without
 `-F`. A successful source build alone is not upgrade acceptance.
+
+For QEMU cases with host-mounted evidence, reuse the same tools in a runtime
+image whose unprivileged account matches the evidence directory owner:
+
+```sh
+BUILDX_CONFIG="$PWD/.theme-preview/buildx" docker build --builder desktop-linux \
+  -f tools/build/Dockerfile.runtime -t boltwrt-runtime:local \
+  --build-arg RUNTIME_UID="$(id -u)" --build-arg RUNTIME_GID="$(id -g)" .
+```
+
+The default parent is `boltwrt-source-builder:local`; override `BUILDER_IMAGE`
+if using a different local tag. This step installs no additional packages.
+Run `tests/runtime/refresh_401.py --help` inside the runtime container for the
+fresh-install, upgrade and optional rollback inputs. Keep its case and evidence
+directories private: they contain test passwords, keys and original backups.

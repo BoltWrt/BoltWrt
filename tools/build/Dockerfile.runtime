@@ -1,0 +1,13 @@
+# Reuse source-build tools for disposable full-system QEMU cases.
+ARG BUILDER_IMAGE=boltwrt-source-builder:local
+FROM ${BUILDER_IMAGE}
+ARG RUNTIME_UID=10000
+ARG RUNTIME_GID=10000
+USER root
+RUN (getent group "${RUNTIME_GID}" || groupadd --gid "${RUNTIME_GID}" runtime) \
+    && (getent passwd "${RUNTIME_UID}" || useradd --uid "${RUNTIME_UID}" \
+        --gid "${RUNTIME_GID}" --home-dir /cases --no-create-home runtime)
+USER ${RUNTIME_UID}:${RUNTIME_GID}
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+WORKDIR /cases
+CMD ["sleep", "infinity"]
