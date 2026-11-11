@@ -74,7 +74,7 @@ case "${1:-help}" in
         ;;
     stop)
         check_owner
-        docker stop --time 45 "$PREVIEW_CONTAINER"
+        docker stop --timeout 45 "$PREVIEW_CONTAINER"
         ;;
     *)
         printf '%s\n' 'Commands: build | prepare FIRMWARE.tar.gz | up | sync | status | logs | stop'

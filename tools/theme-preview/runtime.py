@@ -3,6 +3,7 @@
 import argparse
 import fcntl
 import hashlib
+import http.client
 import importlib.util
 import io
 import json
@@ -14,6 +15,7 @@ import shlex
 import shutil
 import signal
 import socket
+import ssl
 import subprocess
 import tarfile
 import time
@@ -100,6 +102,32 @@ def source_files():
     return files
 
 
+def wait_for_web(timeout=120):
+    certificate_path = ssh('uci -q get nginx._lan.ssl_certificate').decode().strip()
+    if not certificate_path.startswith('/etc/'):
+        raise ValueError('Unexpected preview certificate path.')
+    certificate = ssh('cat ' + shlex.quote(certificate_path)).decode()
+    # Trust this guest's exact certificate fetched over SSH, without changing
+    # the host trust store. Its router hostname differs from our forwarded IP.
+    context = ssl.create_default_context(cadata=certificate)
+    context.check_hostname = False
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        connection = http.client.HTTPSConnection('127.0.0.1', 8444, context=context, timeout=5)
+        try:
+            connection.request('GET', '/cgi-bin/luci/')
+            response = connection.getresponse()
+            response.read()
+            if response.status in (200, 301, 302, 303, 403):
+                return
+        except (OSError, http.client.HTTPException):
+            pass
+        finally:
+            connection.close()
+        time.sleep(1)
+    raise TimeoutError('LuCI did not become ready after restarting uWSGI.')
+
+
 def sync():
     with (DATA / 'sync.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -134,6 +162,7 @@ def sync():
             command += 'rm -f -- ' + ' '.join(shlex.quote('/' + name) for name in removed) + '; '
         command += '/etc/init.d/uwsgi restart >/dev/null 2>&1'
         ssh(command, payload.getvalue(), timeout=120)
+        wait_for_web()
         save('last-sync.json', {'revision': revision, 'time': int(time.time()), 'files': hashes})
         print('Theme synchronized: ' + revision + '. Refresh the browser.', flush=True)
         return True
@@ -148,26 +177,23 @@ def bootstrap():
         (DATA / 'password').write_text(password + '\n')
         (DATA / 'password').chmod(0o600)
     public_key = (DATA / 'id_ed25519.pub').read_text().strip()
-    password = read('credentials.json')['password']
+    # Only public setup commands go over the console: stock firmware may not
+    # provide stty. Password initialization happens over authenticated SSH.
     script = '\n'.join([
         'umask 077', 'mkdir -p /etc/dropbear',
         'grep -qxF ' + shlex.quote(public_key) + ' /etc/dropbear/authorized_keys 2>/dev/null || printf "%s\\n" '
         + shlex.quote(public_key) + ' >> /etc/dropbear/authorized_keys',
-        'if [ ! -f /etc/boltwrt-theme-preview ]; then',
-        "printf '%s\\n%s\\n' " + shlex.quote(password) + ' ' + shlex.quote(password) + ' | passwd root >/dev/null 2>&1',
-        'uci set system.@system[0].hostname=BoltWrt-Preview', 'uci commit system',
-        'hostname BoltWrt-Preview', 'touch /etc/boltwrt-theme-preview', 'fi',
-        'test "$(uci -q get luci.main.mediaurlbase)" = /luci-static/argon',
     ])
     spec = importlib.util.spec_from_file_location('fixture', '/runtime-tools/qemu_runtime.py')
     fixture = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(fixture)
     args = SimpleNamespace(case=VM, command=script, command_file=None,
-                           password_file=DATA / 'password', timeout=600, public_input=False)
+                           password_file=None, timeout=600, public_input=True,
+                           label='preview-public-key-setup')
     result = fixture.execute_serial(args, bytearray())
+    save('public-bootstrap.json', result)
     if result['returncode']:
         raise RuntimeError('Guest bootstrap failed; see VM serial log.')
-    save('bootstrapped.json', {'time': int(time.time())})
 
 
 def qmp(action):
@@ -233,13 +259,24 @@ def serve():
             if machine.poll() is not None or relay.poll() is not None or stopping:
                 raise RuntimeError('Preview process exited during startup.')
             try:
-                ssh('true', timeout=10)
+                ssh('set -e; test "$(uci -q get luci.main.mediaurlbase)" = /luci-static/argon; '
+                    'ubus call system board >/dev/null', timeout=10)
                 break
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
                 if time.monotonic() >= deadline:
                     raise RuntimeError('Preview guest SSH did not become ready.')
                 time.sleep(2)
-        sync()
+        if not (DATA / 'bootstrapped.json').exists():
+            password = read('credentials.json')['password']
+            ssh('set -e; if [ ! -f /etc/boltwrt-theme-preview ]; then '
+                'passwd root >/dev/null 2>&1; '
+                'uci set system.@system[0].hostname=BoltWrt-Preview; uci commit system; '
+                'printf "%s\\n" BoltWrt-Preview > /proc/sys/kernel/hostname; '
+                'touch /etc/boltwrt-theme-preview; fi',
+                (password + '\n' + password + '\n').encode())
+            save('bootstrapped.json', {'time': int(time.time())})
+        if not sync():
+            wait_for_web()
         port = os.environ.get('BOLTWRT_PREVIEW_PORT', '18443')
         save('state.json', {'status': 'ready', 'url': 'https://127.0.0.1:' + port,
                             'credentials': '.theme-preview/credentials.json', 'watch': True})
@@ -280,7 +317,14 @@ def main():
     if action == 'prepare':
         prepare()
     elif action == 'serve':
-        serve()
+        try:
+            serve()
+        except Exception as error:
+            failure = {'status': 'error', 'error_type': type(error).__name__,
+                       'error': str(error)}
+            save('last-error.json', failure)
+            save('state.json', failure)
+            raise
     elif action == 'sync':
         if not sync():
             print('Theme is already synchronized.')
