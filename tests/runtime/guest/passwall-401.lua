@@ -173,7 +173,14 @@ elseif mode == "generate" then
         if id=="bw401_hy" then assert(inbound.users[1].auth=="YWJjAAE=" and inbound.users[1].auth_str==nil, "binary auth became encoded text") end
         local path=directory .. "/" .. id .. ".json"
         write(path,json.stringify(config,1))
-        inventory[#inventory+1]={id=id,type=node.type,path=path}
+        local check
+        if node.type=="Xray" then check="/usr/bin/xray run -test -c "
+        elseif node.type=="sing-box" then check="/usr/bin/sing-box check -c " end
+        if check then
+            assert(os.execute(check .. path .. " >" .. directory .. "/" .. id .. ".check.log 2>&1")==0,
+                "shipped core rejected migrated server configuration: " .. id)
+        end
+        inventory[#inventory+1]={id=id,type=node.type,path=path,shipped_core_check=check~=nil}
     end
     local options={flag="bw401",node="bw401_xray",no_run=true,local_socks_address="127.0.0.1",local_socks_port=19080,dns_listen_port=15353,direct_dns_udp_server="127.0.0.1",direct_dns_udp_port=53,direct_dns_query_strategy="UseIP",remote_dns_tcp_server="127.0.0.1",remote_dns_tcp_port=53,remote_dns_query_strategy="UseIP",remote_dns_detour="remote",dns_cache="1"}
     write(directory .. "/client-xray.json",require("luci.passwall2.util_xray").gen_config(options))

@@ -81,6 +81,27 @@ class Case:
         if result.returncode:
             raise RuntimeError("fixture upload failed")
 
+    def capture_runtime(self, label):
+        # Guest /tmp is lost at reboot/QMP shutdown. These fixtures use private
+        # test credentials; retain their configs, core logs and negative controls
+        # beside the private case evidence, never in release artifacts.
+        result = self.ssh("""set -eu
+set --
+for path in /tmp/boltwrt-401-generated /tmp/boltwrt-401-proxy.* /tmp/boltwrt-401-apk.* /tmp/boltwrt-401-idempotence.log; do
+    [ ! -e "$path" ] || set -- "$@" "$path"
+done
+[ "$#" -gt 0 ]
+tar -czf - "$@"
+""", timeout=60)
+        if result.returncode:
+            raise RuntimeError("could not retain private native runtime evidence")
+        path = self.args.evidence / (label + "-native-runtime.tar.gz")
+        path.write_bytes(result.stdout)
+        self.results.setdefault("private_runtime_evidence", {})[path.name] = {
+            "bytes": len(result.stdout), "sha256": hashlib.sha256(result.stdout).hexdigest(),
+        }
+        self.save()
+
     def http(self, method, path, data=None, cookie=None):
         connection = http.client.HTTPSConnection("127.0.0.1", 8444, context=self.context, timeout=90)
         headers = {}
@@ -252,6 +273,7 @@ echo 'Private migration originals are included in ordinary sysupgrade backups.'
                 self.upload(args.apk, "/tmp/boltwrt-translation.apk")
                 self.upload(GUEST / "apk-trust-401.sh", "/tmp/apk-trust-401.sh")
                 self.step("native-apk-trust", "sh /tmp/apk-trust-401.sh /tmp/boltwrt-translation.apk", timeout=180)
+            self.capture_runtime("before-reboot")
         else:
             self.upload(GUEST / "verify-fresh.sh", "/tmp/verify-fresh.sh")
             self.step("fresh-local", "sh /tmp/verify-fresh.sh x86/64 4.0.1")
@@ -319,6 +341,11 @@ def main():
     except Exception as error:
         if args.evidence.is_dir():
             case.results.update(status="failed", phase=case.phase, error_type=type(error).__name__, error=str(error))
+            if case.launched and case.known:
+                try:
+                    case.capture_runtime("failure")
+                except (OSError, RuntimeError, subprocess.TimeoutExpired):
+                    pass
             case.save()
         print(json.dumps({"status": "failed", "phase": case.phase, "error_type": type(error).__name__}), flush=True)
         return 1
