@@ -186,6 +186,8 @@ class Case:
         os.umask(0o077)
         if args.upgrade_image:
             assert qemu.digest(args.upgrade_image) == args.upgrade_sha256
+        if args.rollback_image:
+            assert args.upgrade_image and qemu.digest(args.rollback_image) == args.rollback_sha256
         launch = SimpleNamespace(case=args.case, evidence=args.evidence, source=args.source,
                                  sha256=args.sha256, format="vmdk", fwtool=None, arch="x86_64",
                                  kernel=None, efi_code=args.efi_code, efi_vars=args.efi_vars,
@@ -216,6 +218,7 @@ class Case:
             self.step("prepare-passwall-400", "umask 077; lua /tmp/passwall-401.lua prepare")
             self.step("activate-fixture-certificate", "/etc/init.d/nginx reload")
             self.identity = self.step("original-identity-files", self.identity_command).decode()
+            self.original_packages = self.step("original-package-inventory", "apk list --installed | LC_ALL=C sort")
             self.web("before-upgrade-web", upgraded=False, candidate=False)
             self.step("backup-final-400", "sysupgrade -b /tmp/boltwrt-400-backup.tar.gz")
             backup = self.ssh("cat /tmp/boltwrt-400-backup.tar.gz", timeout=180)
@@ -244,13 +247,32 @@ class Case:
         self.phase = "real-reboot"
         trigger = self.ssh("nohup /sbin/reboot >/tmp/boltwrt-reboot.log 2>&1 </dev/null &")
         assert trigger.returncode in (0, 255)
-        self.ready("4.0.1", previous=boot)
+        boot = self.ready("4.0.1", previous=boot)
         if args.upgrade_image:
             self.verify_upgrade("after-reboot")
         else:
             self.upload(GUEST / "verify-fresh.sh", "/tmp/verify-fresh.sh")
             self.step("rebooted-fresh-local", "sh /tmp/verify-fresh.sh x86/64 4.0.1")
             self.web("rebooted-fresh-web", upgraded=False)
+        if args.rollback_image:
+            self.upload(args.rollback_image, "/tmp/boltwrt-400.img.gz")
+            self.upload(args.case / "original-400-backup.tar.gz", "/tmp/boltwrt-400-backup.tar.gz")
+            digest = self.step("rollback-image-hash", "sha256sum /tmp/boltwrt-400.img.gz").decode().split()[0]
+            assert digest == args.rollback_sha256
+            self.step("normal-rollback-image-test", "sysupgrade -T /tmp/boltwrt-400.img.gz")
+            self.phase = "normal-firmware-rollback"
+            trigger = self.ssh("nohup /sbin/sysupgrade -f /tmp/boltwrt-400-backup.tar.gz /tmp/boltwrt-400.img.gz >/tmp/boltwrt-rollback.log 2>&1 </dev/null &")
+            assert trigger.returncode in (0,255)
+            self.ready("4.0.0", previous=boot)
+            self.step("rollback-rom-version", "sh -c '. /rom/etc/openwrt_release; test \"$DISTRIB_RELEASE\" = 4.0.0'")
+            for name in ("verify-upgrade-fixture.sh", "passwall-401.lua"):
+                self.upload(GUEST / name, "/tmp/" + name)
+            self.step("rollback-settings", f"sh /tmp/verify-upgrade-fixture.sh {args.intent} 4.0.0")
+            self.step("rollback-passwall", "lua /tmp/passwall-401.lua verify-rollback")
+            assert self.step("rollback-identity-files", self.identity_command).decode() == self.identity
+            assert self.step("rollback-package-inventory", "apk list --installed | LC_ALL=C sort") == self.original_packages
+            self.web("rollback-web", upgraded=False, candidate=False)
+            self.results["normal_rollback_with_original_backup"] = True
         self.results["status"] = "passed"
         self.results["scope"] = "disposable x86 full-system QEMU; no hardware flash or external proxy peer"
         self.save()
@@ -269,9 +291,14 @@ def main():
     parser.add_argument("--efi-vars", type=Path)
     parser.add_argument("--memory", type=int, default=1280)
     parser.add_argument("--apk", type=Path)
+    parser.add_argument("--rollback-image", type=Path,
+                        help="optional official 4.0.0 upgrade image to verify rollback with the original backup")
+    parser.add_argument("--rollback-sha256")
     args = parser.parse_args()
     if bool(args.upgrade_image) != bool(args.upgrade_sha256):
         parser.error("upgrade image and SHA256 must be provided together")
+    if bool(args.rollback_image) != bool(args.rollback_sha256) or (args.rollback_image and not args.upgrade_image):
+        parser.error("rollback requires an upgrade case and the old image SHA256")
     case = Case(args)
     try:
         case.run()

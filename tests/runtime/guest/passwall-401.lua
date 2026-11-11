@@ -140,6 +140,15 @@ elseif mode == "verify" then
     assert(os.execute("lua /usr/share/passwall2/migrate_401.lua apply >/tmp/boltwrt-401-idempotence.log 2>&1")==0)
     assert(before[1]==read("/etc/config/passwall2") and before[2]==read("/etc/config/passwall2_server"), "second migration changed bytes")
     print("PASS actual upgraded UCI: original options, identities, intent, credentials, collision, private backups and idempotence")
+elseif mode == "verify-rollback" then
+    release("4.0.0")
+    for _,config in ipairs({"passwall2","passwall2_server"}) do
+        assert(read("/etc/config/" .. config)==read(legacy .. "/" .. config), "rollback did not restore original config bytes")
+    end
+    for _,id in ipairs(ids) do assert(uci:get("passwall2_server",id)=="user", "legacy schema not restored") end
+    assert(uci:get("passwall2","bw401_xray","transport")=="tcp")
+    assert(uci:get("passwall2","bw401_singbox","method")=="aes-128-gcm")
+    print("PASS ordinary firmware rollback with the original 4.0.0 backup: native config bytes and legacy schema restored")
 elseif mode == "generate" then
     release("4.0.1")
     local json = require("luci.jsonc")
