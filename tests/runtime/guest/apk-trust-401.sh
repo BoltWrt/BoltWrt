@@ -3,7 +3,7 @@
 set -eu
 umask 077
 package=luci-i18n-passwall2-zh-cn
-archive=${1:?provide the candidate build APK for luci-i18n-passwall2-zh-cn}
+archive=${1:?provide the signed delivery APK for luci-i18n-passwall2-zh-cn}
 [ "$(id -u)" = 0 ] && [ -f "$archive" ] && [ ! -L "$archive" ]
 apk info -e "$package" >/dev/null
 temporary=$(mktemp -d /tmp/boltwrt-401-apk.XXXXXX)

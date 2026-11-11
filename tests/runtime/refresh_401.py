@@ -302,7 +302,8 @@ def main():
     parser.add_argument("--efi-code", type=Path)
     parser.add_argument("--efi-vars", type=Path)
     parser.add_argument("--memory", type=int, default=1280)
-    parser.add_argument("--apk", type=Path)
+    parser.add_argument("--apk", type=Path,
+                        help="individually signed luci-i18n-passwall2-zh-cn APK from the delivery bundle")
     parser.add_argument("--rollback-image", type=Path,
                         help="optional official 4.0.0 upgrade image to verify rollback with the original backup")
     parser.add_argument("--rollback-sha256")

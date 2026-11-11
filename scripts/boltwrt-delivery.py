@@ -7,6 +7,7 @@ import io
 import json
 import os
 from pathlib import Path, PurePosixPath
+import shutil
 import subprocess
 import tarfile
 import tempfile
@@ -85,8 +86,6 @@ def stage(root, target):
         raise ValueError("checked rootfs or manifest has changed")
     archives = package_files(root, target, images["packages"])
     keys = public_keys(roots[0])
-    inventory = {name: {"bytes": path.stat().st_size, "sha256": sha256(path)}
-                 for name, path in archives.items()}
     prefix = f"boltwrt-{images['version']}-{target}"
     bundle = directory / (prefix + "-installed-packages.tar.gz")
     with tempfile.TemporaryDirectory(prefix="boltwrt-delivery-", dir=root / "tmp") as temporary:
@@ -96,15 +95,33 @@ def stage(root, target):
         for name, content in keys.items():
             (key_dir / name).write_bytes(content)
         apk = root / "staging_dir/host/bin/apk"
+        signing_key = root / "private-key.pem"
+        if not signing_key.is_file() or signing_key.is_symlink():
+            raise ValueError("the build signing key is unavailable for delivery APK signatures")
+        # OpenWrt signs repository indexes. Standalone file uploads require
+        # individual APK signatures too; add these only to delivery copies.
+        copy_dir = temporary / "apk"
+        copy_dir.mkdir()
+        copies = {}
+        for name, path in archives.items():
+            copies[name] = copy_dir / name
+            shutil.copyfile(path, copies[name])
+        signed = subprocess.run([str(apk), "adbsign", "--allow-untrusted", "--reset-signatures", "--sign-key", str(signing_key),
+                                 *map(str, copies.values())], capture_output=True, text=True)
+        if signed.returncode:
+            raise ValueError("standalone delivery APK signing failed:\n" + signed.stdout + signed.stderr)
         verify = subprocess.run([str(apk), "--no-network", "--repositories-file", "/dev/null",
-                                 "--keys-dir", str(key_dir), "verify", *map(str, archives.values())],
+                                 "--keys-dir", str(key_dir), "verify", *map(str, copies.values())],
                                 capture_output=True, text=True)
         if verify.returncode:
             raise ValueError("a matching APK failed checksum/signature verification with the image's public keys:\n" + verify.stdout + verify.stderr)
+        inventory = {name: {"bytes": path.stat().st_size, "sha256": sha256(path),
+                            "build_apk_sha256": sha256(archives[name])}
+                     for name, path in copies.items()}
         temporary_bundle = temporary / "packages.tar.gz"
         with temporary_bundle.open("wb") as output, gzip.GzipFile(filename="", mode="wb", fileobj=output, mtime=0) as compressed:
             with tarfile.open(fileobj=compressed, mode="w") as archive:
-                for name, path in sorted(archives.items()):
+                for name, path in sorted(copies.items()):
                     member = tarfile.TarInfo("apk/" + name)
                     member.size = path.stat().st_size
                     member.mode = 0o644
@@ -124,6 +141,7 @@ def stage(root, target):
         "patched_files_sha256": prepared["patched_files_sha256"],
         "software": software, "images": images["images"],
         "apk_bundle": {"name": bundle.name, "sha256": sha256(bundle), "packages": len(inventory),
+                       "signing": "build-key signatures added to standalone delivery copies",
                        "verified_with_actual_image_public_keys": True,
                        "public_keys_sha256": {name: hashlib.sha256(content).hexdigest() for name, content in keys.items()}},
         "scope": "build/image/payload checks and installed APK delivery; runtime acceptance is recorded separately",
