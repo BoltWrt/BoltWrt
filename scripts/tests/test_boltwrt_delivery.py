@@ -1,5 +1,6 @@
 """Delivery selection boundaries; native APK signatures are checked on artifacts."""
 import importlib.util
+import hashlib
 import io
 from pathlib import Path
 import tarfile
@@ -58,6 +59,44 @@ class DeliveryTests(unittest.TestCase):
         path = self.rootfs("etc/apk/keys/../../escape", public)
         with self.assertRaisesRegex(ValueError, "unexpected APK public key"):
             delivery.public_keys(path)
+
+    def test_incremental_delivery_refreshes_both_checksum_lists(self):
+        directory = self.root
+        image = directory / 'boltwrt-fixture.img.gz'
+        image.write_bytes(b'image')
+        provenance = directory / 'boltwrt-fixture-build.json'
+        provenance.write_bytes(b'previous provenance')
+        metadata = directory / 'config.buildinfo'
+        metadata.write_bytes(b'build configuration')
+        standard = directory / 'sha256sums'
+        standard.write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest() + '  ' + p.name + '\n'
+                                   for p in (image, provenance, metadata)))
+        delivery.update_checksums(directory, 'boltwrt-fixture')
+        provenance.write_bytes(b'current provenance')
+        bundle = directory / 'boltwrt-fixture-installed-packages.tar.gz'
+        bundle.write_bytes(b'current signed bundle')
+        delivery.update_checksums(directory, 'boltwrt-fixture')
+        for checksum in (standard, directory / 'boltwrt-fixture-SHA256SUMS'):
+            for line in checksum.read_text().splitlines():
+                digest, name = line.split('  ', 1)
+                self.assertEqual(digest, hashlib.sha256((directory / name).read_bytes()).hexdigest(), name)
+        self.assertIn(bundle.name, standard.read_text())
+        self.assertIn('config.buildinfo', standard.read_text())
+        self.assertNotIn('sha256sums', standard.read_text())
+
+    def test_standard_checksum_cannot_read_outside_artifacts_or_create_a_cycle(self):
+        standard = self.root / 'sha256sums'
+        for name in ('../private-key.pem', 'sha256sums'):
+            standard.write_text('0' * 64 + '  ' + name + '\n')
+            with self.assertRaisesRegex(ValueError, 'invalid/duplicate'):
+                delivery.update_checksums(self.root, 'boltwrt-fixture')
+        secret = self.root / 'unrelated'
+        secret.write_bytes(b'private fixture')
+        link = self.root / 'metadata'
+        link.symlink_to(secret)
+        standard.write_text('0' * 64 + '  metadata\n')
+        with self.assertRaisesRegex(ValueError, 'not a regular build artifact'):
+            delivery.update_checksums(self.root, 'boltwrt-fixture')
 
 
 if __name__ == "__main__":

@@ -44,6 +44,11 @@ ordinary package output relies on signed repository indexes. The bundle
 contains public keys only. Keep the build private key in the private build
 workspace.
 
+Delivery refreshes the standard OpenWrt `sha256sums` after producing the signed
+bundle and provenance, so incremental builds keep both checksum lists valid.
+The firmware archive also retains `profiles.json`, `config.buildinfo`,
+`feeds.buildinfo` and `version.buildinfo` to identify the exact build inputs.
+
 Archive each target's images, delivery bundle, checksum file and `logs/boltwrt/`
 before switching configurations. `build.json` records the source commit,
 locked feeds, downstream patches and actual payload checks. Its scope is build

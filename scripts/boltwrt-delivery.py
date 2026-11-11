@@ -7,6 +7,7 @@ import io
 import json
 import os
 from pathlib import Path, PurePosixPath
+import re
 import shutil
 import subprocess
 import tarfile
@@ -19,6 +20,33 @@ TARGETS = {"x86-64": ("x86/64", "x86_64"),
 def sha256(path):
     with Path(path).open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def update_checksums(directory, prefix):
+    """Refresh both lists after delivery files replace any prior build output."""
+    standard = directory / "sha256sums"
+    if standard.is_symlink() or not standard.is_file():
+        raise ValueError("the standard build checksum list is unavailable")
+    names = set()
+    for line in standard.read_text().splitlines():
+        match = re.fullmatch(r"[0-9a-f]{64} [ *](.+)", line)
+        name = match[1] if match else ""
+        if not name or PurePosixPath(name).name != name or name in names or name == standard.name:
+            raise ValueError("invalid/duplicate standard checksum entry")
+        names.add(name)
+    checksum = directory / (prefix + "-SHA256SUMS")
+    files = sorted(path for path in directory.glob("boltwrt-*") if path.is_file() and path != checksum)
+    for path in [standard, *files, *(directory / name for name in names)]:
+        if path.is_symlink() or not path.is_file():
+            raise ValueError("checksum input is not a regular build artifact")
+    if checksum.is_symlink():
+        raise ValueError("delivery checksum output must not be a symlink")
+    checksum.write_text("".join(f"{sha256(path)}  {path.name}\n" for path in files))
+    names.update(path.name for path in files)
+    names.add(checksum.name)
+    # This list includes the product list and ordinary OpenWrt build metadata;
+    # the product list excludes both checksum files, so there is no hash cycle.
+    standard.write_text("".join(f"{sha256(directory / name)}  {name}\n" for name in sorted(names)))
 
 
 def package_files(root, target, packages):
@@ -160,11 +188,7 @@ def stage(root, target):
     encoded = json.dumps(record, indent=2) + "\n"
     receipt.write_text(encoded)
     (root / f"logs/boltwrt/{target}-delivery.json").write_text(encoded)
-    checksum = directory / (prefix + "-SHA256SUMS")
-    files = sorted(path for path in directory.glob("boltwrt-*") if path.is_file() and path != checksum)
-    if any(path.is_symlink() for path in files):
-        raise ValueError("delivery artifacts must not be symlinks")
-    checksum.write_text("".join(f"{sha256(path)}  {path.name}\n" for path in files))
+    update_checksums(directory, prefix)
     print(f"{target}: staged {len(inventory)} signed installed APKs, build provenance and checksums")
 
 
