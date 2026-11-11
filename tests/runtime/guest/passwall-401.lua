@@ -22,6 +22,7 @@ local uuid1 = "00000000-0000-4000-8000-000000000001"
 local uuid2 = "00000000-0000-4000-8000-000000000002"
 local servers = {
     bw401_vless = {type="Xray", protocol="vless", transport="tcp", uuid={uuid1, uuid2}},
+    bw401_vless_tls = {type="Xray", protocol="vless", transport="tcp", uuid={uuid1}, tls="1"},
     bw401_xss = {type="Xray", protocol="shadowsocks", method="aes-128-gcm", password="fixture-xss"},
     bw401_socks = {type="Xray", protocol="socks", auth="0", udp_forward="1"},
     bw401_auth = {type="Xray", protocol="socks", auth="1", username="fixture-user", password="fixture-auth"},
@@ -38,7 +39,7 @@ local servers = {
     bw401_ssr = {type="SSR", method="aes-128-cfb", password="fixture-ssr", protocol="origin", obfs="plain"},
     bw401_rust = {type="SS-Rust", method="aes-128-gcm", password="fixture-rust"},
 }
-local ports = {bw401_vless=19100, bw401_sbss=19101, bw401_native=19102}
+local ports = {bw401_vless=19100, bw401_sbss=19101, bw401_native=19102, bw401_vless_tls=19105}
 local ids = {}; for id in pairs(servers) do ids[#ids+1]=id end; table.sort(ids)
 local function same(a,b)
     if type(a) ~= type(b) then return false end
@@ -72,6 +73,9 @@ if mode == "prepare" then
     -- Deliberately occupy the first generated account name.
     put("passwall2_server", "bw401_bw401_vless_1", "user", {username="existing-user", password="existing-account-password"})
     put("passwall2", "bw401_xray", "nodes", {type="Xray", protocol="vless", address="127.0.0.1", port="19100", uuid=uuid1, transport="tcp", encryption="none", tls="0", stream_security="none"})
+    local certificate=assert(io.popen("openssl x509 -in " .. root .. "/test.crt -outform DER | openssl dgst -sha256"))
+    local pin=assert(certificate:read("*a"):match("(%x+)%s*$")); certificate:close(); assert(#pin==64)
+    put("passwall2", "bw401_xray_tls", "nodes", {type="Xray", protocol="vless", address="127.0.0.1", port="19105", uuid=uuid1, transport="tcp", encryption="none", tls="1", stream_security="tls", tls_serverName="boltwrt-upgrade-fixture.invalid", tls_CertSha=pin})
     put("passwall2", "bw401_singbox", "nodes", {type="sing-box", protocol="shadowsocks", address="127.0.0.1", port="19101", method="aes-128-gcm", password="fixture-sbss"})
     put("passwall2", "bw401_hysteria", "nodes", {type="Hysteria2", address="127.0.0.1", port="19102", hysteria2_auth_password="fixture-native", tls_serverName="boltwrt-upgrade-fixture.invalid", tls_allowInsecure="1"})
     put("passwall2", "bw401_ss", "nodes", {type="SS", address="127.0.0.1", port="19103", method="aes-128-gcm", password="fixture-ss"})
@@ -84,7 +88,7 @@ if mode == "prepare" then
         local backup = assert(io.open("/etc/sysupgrade.conf", "a"))
         backup:write(legacy .. "/" .. config .. "\n"); backup:close()
     end
-    print("PASS seeded official 4.0.0 native UCI fixture: 16 servers, five client types and an existing account collision")
+    print("PASS seeded official 4.0.0 native UCI fixture: " .. #ids .. " servers, five client types, a TLS certificate pin and an existing account collision")
 elseif mode == "verify" then
     release("4.0.1")
     local old = require("uci").cursor(legacy, legacy .. "/state")
@@ -118,6 +122,7 @@ elseif mode == "verify" then
     assert(type(users)=="table" and #users==2 and users[1]=="bw401_bw401_vless_2")
     assert(uci:get("passwall2_server",users[1],"uuid")==uuid1 and uci:get("passwall2_server",users[2],"uuid")==uuid2)
     assert(uci:get("passwall2_server","bw401_bw401_vless_1","password")=="existing-account-password")
+    assert(uci:get("passwall2","bw401_xray_tls","tls_pinSHA256")==old:get("passwall2","bw401_xray_tls","tls_CertSha"), "Xray certificate pin was not migrated")
     for _,case in ipairs({{"bw401_auth","fixture-auth"},{"bw401_naive","fixture-naive-pass"},{"bw401_anytls","fixture-anytls"},{"bw401_hy","YWJjAAE="},{"bw401_tuic","fixture-tuic"},{"bw401_sbhy2","fixture-sbhy2"}}) do
         local accounts=uci:get("passwall2_server",case[1],"users")
         assert(type(accounts)=="table" and #accounts==1, "missing migrated account: " .. case[1])
@@ -136,6 +141,11 @@ elseif mode == "generate" then
     release("4.0.1")
     local json = require("luci.jsonc")
     local api = require("luci.passwall2.api")
+    local digest_bytes=""; local digest_hex=""
+    for byte=0,31 do digest_bytes=digest_bytes .. string.char(byte); digest_hex=digest_hex .. string.format("%02X",byte) end
+    local encoded=require("nixio").bin.b64encode(digest_bytes)
+    assert(api.sha256_sb_xray(encoded)==digest_hex, "native NUL-containing certificate digest conversion failed")
+    assert(api.sha256_xray_sb(digest_hex)==encoded, "native certificate digest roundtrip failed")
     local directory="/tmp/boltwrt-401-generated"
     assert(os.execute("umask 077; mkdir -p " .. directory)==0)
     local names={Xray="util_xray",["sing-box"]="util_sing-box",Hysteria2="util_hysteria2",SS="util_shadowsocks",SSR="util_shadowsocks",["SS-Rust"]="util_shadowsocks"}
@@ -152,12 +162,14 @@ elseif mode == "generate" then
     end
     local options={flag="bw401",node="bw401_xray",no_run=true,local_socks_address="127.0.0.1",local_socks_port=19080,dns_listen_port=15353,direct_dns_udp_server="127.0.0.1",direct_dns_udp_port=53,direct_dns_query_strategy="UseIP",remote_dns_tcp_server="127.0.0.1",remote_dns_tcp_port=53,remote_dns_query_strategy="UseIP",remote_dns_detour="remote",dns_cache="1"}
     write(directory .. "/client-xray.json",require("luci.passwall2.util_xray").gen_config(options))
+    options.node="bw401_xray_tls"; options.flag="bw401tls"; options.local_socks_port=19083
+    write(directory .. "/client-xray-tls.json",require("luci.passwall2.util_xray").gen_config(options))
     options.node="bw401_singbox"; options.flag="bw401sb"; options.local_socks_port=19081
     write(directory .. "/client-singbox.json",require("luci.passwall2.util_sing-box").gen_config(options))
     options.node="bw401_hysteria"; options.local_socks_port=19082
     write(directory .. "/client-hysteria.json",require("luci.passwall2.util_hysteria2").gen_config(options))
     write(directory .. "/inventory.json",json.stringify(inventory,1))
-    print("PASS actual shipped generators: 16 upgraded servers and Xray/Sing-Box/native Hysteria2 clients")
+    print("PASS actual shipped generators: " .. #ids .. " upgraded servers and Xray/Sing-Box/native Hysteria2 clients, including a migrated TLS pin")
 else
     error("unexpected fixture mode")
 end
