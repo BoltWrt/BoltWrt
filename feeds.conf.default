@@ -3,4 +3,4 @@ src-git luci https://git.openwrt.org/project/luci.git^b2e0be4b46ec0fd43394c081fa
 src-git routing https://git.openwrt.org/feed/routing.git^625f9d8446807708bab4eef26cdc44692164818a
 src-git telephony https://git.openwrt.org/feed/telephony.git^c58ec5a6703966dcccb53d0919698c8aba3a9ef5
 src-git video https://github.com/openwrt/video.git^094bf58da6682f895255a35a84349a79dab4bf95
-src-git BoltWrt https://github.com/BoltWrt/Packages.git^d5c6c67fc8712cb81c012120b02747fc336ee904
+src-git BoltWrt https://github.com/BoltWrt/Packages.git^833eb03b3635f8963cc279e4a889a41b3c0b58d0
