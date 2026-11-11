@@ -16,6 +16,7 @@
 /files
 /target/linux/feeds
 /overlay
+/.theme-preview
 /package/feeds
 /package/openwrt-packages
 /*.patch
