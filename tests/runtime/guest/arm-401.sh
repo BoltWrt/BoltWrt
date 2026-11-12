@@ -12,7 +12,8 @@ fixture=${1:?provide the private original 4.0.0 ARM fixture archive}
 fixture_sha256=${2:?provide the verified fixture SHA256}
 signed_apk=${3:?provide the matching signed delivery translation APK}
 tools=${4:-/testtools}
-[ -r "$fixture" ] && [ -r "$signed_apk" ] && [ -f "$tools/passwall-401.lua" ]
+tampered_apk=${5:?provide the signed-metadata mutation from apk_fixture.py}
+[ -r "$fixture" ] && [ -r "$signed_apk" ] && [ -r "$tampered_apk" ] && [ -f "$tools/passwall-401.lua" ]
 [ "$(sha256sum "$fixture" | awk '{print $1}')" = "$fixture_sha256" ]
 [ ! -e /root/boltwrt-upgrade-fixture ]
 [ ! -e /etc/boltwrt/migrations/4.0.1/passwall2 ]
@@ -127,5 +128,5 @@ frontend boltwrt_upgrade_fixture
     http-request return status 200 content-type text/plain string boltwrt-upgrade-fixture
 EOF
 sh "$tools/proxy-401.sh" > "$report/proxy.log" 2>&1
-sh "$tools/apk-trust-401.sh" "$signed_apk" > "$report/apk.log" 2>&1
+sh "$tools/apk-trust-401.sh" "$signed_apk" "$tampered_apk" > "$report/apk.log" 2>&1
 echo 'ARM_401_USERLAND_PASSED'
