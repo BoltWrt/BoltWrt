@@ -108,9 +108,16 @@ With all capabilities dropped, root cannot read a host-owned mode-0600 file.
 Stream each private input through `docker exec -i` into a root-owned container
 file with `umask 077`; `docker cp` can retain the original host UID.
 
+In the Python controller container, generate a signature negative control with
+`python3 tests/runtime/apk_fixture.py SIGNED_TRANSLATION.apk SIGNED_METADATA_MUTANT.apk`
+and copy it alongside the original signed APK. This changes one package-name
+byte inside signed ADB metadata while preserving its signature and data blocks.
+Changing only the compressed file's final byte can leave the entire signed
+package unchanged and is not a valid signature negative control.
+
 ```sh
 BOLTWRT_TEST_RELEASE=4.1.0 sh /testtools/arm-401.sh /tmp/legacy-400-fixture.tar.gz FIXTURE_SHA256 \
-  /tmp/luci-i18n-passwall2-zh-cn-26.11.11.apk /testtools
+  /tmp/luci-i18n-passwall2-zh-cn-26.11.11.apk /testtools /tmp/signed-metadata-mutant.apk
 ```
 
 Prepare the fixture using the original 4.0.0 ARM rootfs and
