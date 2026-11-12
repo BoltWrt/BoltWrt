@@ -3,8 +3,9 @@
 The x86 runner defaults to candidate release 4.1.0; pass `--release 4.0.1` for
 an earlier candidate. It records the expected release and passes it to native
 helpers as `BOLTWRT_TEST_RELEASE`. For the ARM command below, set that variable
-explicitly. The 4.0.0 baseline and `/etc/boltwrt/migrations/4.0.1/` migration ID
-remain unchanged. Preserve earlier 4.0.1 results under their original hashes;
+explicitly. The 4.0.0 baseline remains unchanged. Current firmware retains no
+persistent migration backup and contains no test-candidate cleanup hook.
+Preserve earlier 4.0.1 results under their original hashes;
 new tag-built firmware needs its own case and evidence directories.
 
 Run these checks in task-specific Docker containers. Build tools and runtime
@@ -56,10 +57,12 @@ The minimum matrix is:
 Fresh cases check default configuration and running services, root-password
 login, the served TLS certificate, Argon assets and component-update POST/CSRF
 behavior. Upgrade cases add ordinary configuration-preserving `sysupgrade`
-without `-F`, identity and configuration retention, private migration backups,
-17 migrated server configurations, 13 real Xray/Sing-Box configuration checks,
-local proxy traffic and a wrong-certificate-pin rejection. Native Hysteria2 and
-SS-libev also run through the shipped PassWall2 client dispatcher. The signed
+without `-F`, identity and configuration retention, absence of retired migration
+backups, migrated server configurations, real Xray/Sing-Box configuration checks,
+local proxy traffic and a wrong-certificate-pin rejection. Migrated Hysteria2
+and SS nodes also run through the upstream Sing-Box/SS-Rust client dispatcher.
+Explicit `--release 4.0.1` retains the historical candidate's expectations;
+never count its earlier acceptance as evidence for the new policy. The signed
 translation APK is strictly verified, a tampered copy is rejected, and a native
 remove/reinstall transaction must preserve package inventory and trusted keys.
 Legacy ACL checks exercise global-off intent, dynamic inherited ports and

@@ -54,8 +54,9 @@ jobs:
       - name: Check retained PassWall2 compatibility contracts
         run: |
           pw=feeds/BoltWrt/luci/applications/luci-app-passwall2
-          lua5.1 "$pw/tests/hysteria2-config.lua" "$pw/luasrc/passwall2/util_hysteria2.lua"
           lua5.1 "$pw/tests/migration-401.lua" "$pw/luasrc/passwall2/migrate_401.lua"
+          lua5.1 "$pw/tests/upstream-policy.lua" "$pw/luasrc/passwall2/migrate_401.lua"
+          python3 tests/policy/check-source.py --packages feeds/BoltWrt --luci feeds/luci
           lua5.1 "$pw/tests/release-policy.lua" "$pw/luasrc/passwall2/release.lua"
           lua5.1 "$pw/tests/tls-config.lua" "$pw/luasrc/passwall2/util_sing-box.lua"
           lua5.1 "$pw/tests/tls-pin.lua" "$pw/luasrc/passwall2/api.lua"

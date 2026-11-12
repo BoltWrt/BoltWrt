@@ -52,7 +52,8 @@ local function read(path) local f=assert(io.open(path,'rb'));local s=f:read('*a'
 local packages=assert(json.parse(read(directory .. '/packages.json')))
 local indexed={}
 for _,p in ipairs(packages) do assert(not indexed[p.name]); indexed[p.name]=p end
-assert(indexed['luci-app-passwall2'].version=='26.11.11-r3','wrong downstream PassWall2 release')
+local expected=os.getenv('BOLTWRT_TEST_RELEASE')=='4.1.0' and '26.11.11-r4' or '26.11.11-r3'
+assert(indexed['luci-app-passwall2'].version==expected,'wrong downstream PassWall2 release')
 local kernel=assert(indexed.kernel).version
 assert(kernel:match('^6%.12%.112~%x+%-r%d+$'),'unexpected packaged kernel ABI')
 local kmods=0
@@ -97,12 +98,17 @@ kill -0 "$rpcd_pid"
 sh /etc/uci-defaults/zz-passwall2-boltwrt-401 > "$report/migrate.log" 2>&1
 lua "$tools/passwall-401.lua" verify > "$report/migration-verify.log" 2>&1
 lua "$tools/passwall-401.lua" acl > "$report/acl-policy.log" 2>&1
-for name in passwall2 passwall2_server; do
-    [ "$(ls -ldn "/etc/boltwrt/migrations/4.0.1/$name" | awk '{print $1, $3, $4}')" = '-rw------- 0 0' ]
-done
-for path in /etc/boltwrt /etc/boltwrt/migrations /etc/boltwrt/migrations/4.0.1; do
-    [ "$(ls -ldn "$path" | awk '{print $1, $3, $4}')" = 'drwx------ 0 0' ]
-done
+if [ "$BOLTWRT_TEST_RELEASE" = 4.0.1 ]; then
+    for name in passwall2 passwall2_server; do
+        [ "$(ls -ldn "/etc/boltwrt/migrations/4.0.1/$name" | awk '{print $1, $3, $4}')" = '-rw------- 0 0' ]
+    done
+    for path in /etc/boltwrt /etc/boltwrt/migrations /etc/boltwrt/migrations/4.0.1; do
+        [ "$(ls -ldn "$path" | awk '{print $1, $3, $4}')" = 'drwx------ 0 0' ]
+    done
+else
+    [ ! -e /etc/boltwrt/migrations/4.0.1 ]
+    [ ! -e /etc/uci-defaults/94-boltwrt-migration-cleanup ]
+fi
 ubus -t 3 call uci get '{"config":"passwall2"}' > "$report/rpcd-uci.json"
 [ "$(jsonfilter -i "$report/rpcd-uci.json" -e '@.values.bw401_xray.transport')" = raw ]
 echo 'ARM_NATIVE_MIGRATION_AND_RPC_PASSED'

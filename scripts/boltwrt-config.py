@@ -14,14 +14,16 @@ ROOT = Path(__file__).resolve().parent.parent
 TARGETS = ("x86-64", "cmcc-rax3000m")
 PASSWALL_CLIENT_BACKENDS = {
     "Haproxy": ("haproxy",),
-    "Hysteria": ("hysteria",),
-    "Shadowsocks_Libev_Client": ("shadowsocks-libev-ss-local", "shadowsocks-libev-ss-redir"),
     "Shadowsocks_Rust_Client": ("shadowsocks-rust-sslocal",),
     "ShadowsocksR_Libev_Client": ("shadowsocksr-libev-ssr-local", "shadowsocksr-libev-ssr-redir"),
     "Simple_Obfs": ("simple-obfs-client",),
-    "SingBox": ("sing-box",),
     "V2ray_Plugin": ("v2ray-plugin",),
 }
+REMOVED_BACKENDS = ("hysteria", "naiveproxy", "tuic-client",
+                    "shadowsocks-libev-ss-local", "shadowsocks-libev-ss-redir",
+                    "shadowsocks-libev-ss-server")
+PASSWALL_BASIC_CORES = {"Xray": ("xray-core",), "SingBox": ("sing-box",),
+                       "All": ("xray-core", "sing-box")}
 
 
 def read_config(path):
@@ -83,6 +85,21 @@ def verify(target, release_tag=""):
             for backend in backends:
                 if actual.get(f"CONFIG_PACKAGE_{backend}") != "y":
                     errors.append(f"{key}: missing selected backend CONFIG_PACKAGE_{backend}=y")
+    for choice, backends in PASSWALL_BASIC_CORES.items():
+        key = f"CONFIG_PACKAGE_luci-app-passwall2_Basic_Core_{choice}"
+        if actual.get(key) == "y":
+            for backend in backends:
+                if actual.get(f"CONFIG_PACKAGE_{backend}") != "y":
+                    errors.append(f"{key}: missing selected backend CONFIG_PACKAGE_{backend}=y")
+    for name in REMOVED_BACKENDS:
+        if actual.get(f"CONFIG_PACKAGE_{name}") in ("y", "m"):
+            errors.append(f"upstream policy excludes standalone backend {name}")
+    for name in ("Hysteria", "NaiveProxy", "Shadowsocks_Libev_Client", "Shadowsocks_Libev_Server", "SingBox", "tuic_client"):
+        if actual.get(f"CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_{name}") in ("y", "m"):
+            errors.append(f"obsolete PassWall2 INCLUDE_{name}")
+    for key, value in actual.items():
+        if key.startswith("CONFIG_PACKAGE_luci-theme-") and value in ("y", "m") and key != "CONFIG_PACKAGE_luci-theme-argon":
+            errors.append(f"fixed-theme policy excludes {key}")
     if not any(actual.get(f"CONFIG_PACKAGE_apk-{tls}") == "y"
                for tls in ("mbedtls", "openssl")):
         errors.append("no APK backend selected")

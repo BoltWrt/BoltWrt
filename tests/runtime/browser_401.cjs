@@ -38,6 +38,8 @@ async function main() {
   const parent = JSON.parse(parentBytes);
   const credentials = JSON.parse(await fs.readFile(path.join(caseDirectory, 'credentials.json')));
   assert.equal(parent.status, 'passed', 'use a completed accepted upgrade fixture');
+  const release = parent.candidate_release || '4.0.1';
+  const upstreamPolicy = release !== '4.0.1';
   const result = {status: 'running', parent_result_sha256: hash(parentBytes),
     runner_sha256: hash(await fs.readFile(__filename)), node: process.version,
     puppeteer: require('puppeteer-core/package.json').version,
@@ -82,9 +84,10 @@ async function main() {
     const service = '/cgi-bin/luci/admin/services/passwall2/';
     const pages = [
       ['overview', '/cgi-bin/luci/admin/status/overview'],
+      ...(upstreamPolicy ? [['system-settings', '/cgi-bin/luci/admin/system/system']] : []),
       ['settings', service + 'settings'], ['app-update', service + 'app_update'],
-      ['native-hysteria2', service + 'node_config/bw401_hysteria'],
-      ['native-ss-libev', service + 'node_config/bw401_ss'],
+      [upstreamPolicy ? 'migrated-hysteria2' : 'native-hysteria2', service + 'node_config/bw401_hysteria'],
+      [upstreamPolicy ? 'migrated-ss-rust' : 'native-ss-libev', service + 'node_config/bw401_ss'],
       ['migrated-xray-tls', service + 'node_config/bw401_xray_tls'],
       ['migrated-server', service + 'server_config/bw401_vless'],
       ['migrated-acl', service + 'acl_config/bw401_acl_global'],
@@ -105,7 +108,13 @@ async function main() {
       });
       assert(rendered.text_length > 20 && rendered.width > 200 && rendered.height > 20, label + ' rendered empty content');
       assert(rendered.argon_stylesheets > 0, 'Argon stylesheet missing');
-      if (label === 'overview') assert((await page.$eval('body', element => element.innerText)).includes('4.0.1'));
+      if (label === 'overview') assert((await page.$eval('body', element => element.innerText)).includes(release));
+      if (upstreamPolicy) {
+        assert.equal(await page.$('#argon-appearance'), null, 'appearance selector remains');
+        assert.equal(await page.$('a[href*="/admin/system/argon-config"]'), null, 'Argon settings link remains');
+        if (label === 'system-settings')
+          assert.equal(await page.$('[id*="_mediaurlbase"]'), null, 'theme selector remains');
+      }
       if (['overview', 'app-update', 'native-hysteria2'].includes(label))
         await page.screenshot({path: path.join(output, label + '.png'), fullPage: true});
       result.pages.push({label, route, ...rendered});

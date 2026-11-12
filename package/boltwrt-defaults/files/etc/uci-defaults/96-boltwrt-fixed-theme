@@ -1,0 +1,10 @@
+#!/bin/sh
+# Argon is the sole product theme; preserve language and other LuCI settings.
+set -eu
+uci -q get luci.main >/dev/null
+uci set 'luci.main.mediaurlbase=/luci-static/argon'
+uci -q delete luci.themes || true
+uci set 'luci.themes=internal'
+uci set 'luci.themes.Argon=/luci-static/argon'
+uci commit luci
+exit 0
