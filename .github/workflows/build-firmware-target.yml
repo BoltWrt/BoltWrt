@@ -49,6 +49,20 @@ jobs:
         with:
           target: ${{ inputs.target }}
 
+      # These are source contract checks. Native libuci, target cores and the
+      # actual upgrade path are separately verified with the built firmware.
+      - name: Check retained PassWall2 compatibility contracts
+        run: |
+          pw=feeds/BoltWrt/luci/applications/luci-app-passwall2
+          lua5.1 "$pw/tests/hysteria2-config.lua" "$pw/luasrc/passwall2/util_hysteria2.lua"
+          lua5.1 "$pw/tests/migration-401.lua" "$pw/luasrc/passwall2/migrate_401.lua"
+          lua5.1 "$pw/tests/release-policy.lua" "$pw/luasrc/passwall2/release.lua"
+          lua5.1 "$pw/tests/tls-config.lua" "$pw/luasrc/passwall2/util_sing-box.lua"
+          lua5.1 "$pw/tests/tls-pin.lua" "$pw/luasrc/passwall2/api.lua"
+          node "$pw/tests/browser-helpers.js" "$pw"
+          msgfmt --check -o /dev/null "$pw/po/zh-cn/passwall2.po"
+          msgfmt --check -o /dev/null "$pw/po/zh-tw/passwall2.po"
+
       - name: Compute source cache key
         id: cache_key
         env:
@@ -189,6 +203,16 @@ jobs:
           TARGET: ${{ inputs.target }}
         run: python3 scripts/boltwrt-verify.py "$TARGET" --release-tag "$BOLTWRT_RELEASE_TAG"
 
+      - name: Check packaged software and unified Go compiler
+        env:
+          TARGET: ${{ inputs.target }}
+        run: python3 scripts/boltwrt-software.py --build-root . --target "$TARGET"
+
+      - name: Stage matching signed APKs and reproducible build evidence
+        env:
+          TARGET: ${{ inputs.target }}
+        run: python3 scripts/boltwrt-delivery.py --build-root . --target "$TARGET"
+
       - name: Open debug session on requested manual failure
         if: ${{ failure() && inputs.debug_on_failure }}
         uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113 # v3
@@ -210,6 +234,12 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: BoltWrt-Firmware_${{ inputs.target }}
-          path: ${{ inputs.target_dir }}/boltwrt-*
+          path: |
+            ${{ inputs.target_dir }}/boltwrt-*
+            ${{ inputs.target_dir }}/sha256sums
+            ${{ inputs.target_dir }}/profiles.json
+            ${{ inputs.target_dir }}/config.buildinfo
+            ${{ inputs.target_dir }}/feeds.buildinfo
+            ${{ inputs.target_dir }}/version.buildinfo
           if-no-files-found: error
           overwrite: true
