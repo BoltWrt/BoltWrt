@@ -18,6 +18,9 @@ class PrepareError(RuntimeError):
 
 PATCHES = {
     "luci": {
+        "modules/luci-mod-system/Makefile": [
+            ("LUCI_TITLE:=LuCI Administration - Global System Settings\n",
+             "PKG_RELEASE:=2\n\nLUCI_TITLE:=LuCI Administration - Global System Settings\n")],
         # Keep language and table preferences, but expose no theme selector.
         "modules/luci-mod-system/htdocs/luci-static/resources/view/system/system.js": [
             ("""\t\to = s.taboption('language', form.ListValue, '_mediaurlbase', _('Design'))

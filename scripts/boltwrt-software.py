@@ -22,6 +22,60 @@ VERSION_PACKAGES = {
 }
 
 
+def check_product_policy(archive):
+    forbidden = {
+        'usr/bin/hysteria', 'usr/bin/ss-local', 'usr/bin/ss-redir', 'usr/bin/ss-server',
+        'usr/bin/naive', 'usr/bin/tuic-client',
+        'etc/uci-defaults/94-boltwrt-migration-cleanup',
+        'www/luci-static/resources/view/argon-config.js',
+        'www/luci-static/resources/argon-appearance.js',
+        'usr/share/luci/menu.d/luci-app-argon-config.json',
+        'usr/share/rpcd/acl.d/luci-app-argon-config.json',
+        'usr/share/rpcd/acl.d/luci-theme-argon.json',
+        'usr/libexec/rpcd/luci.argon', 'usr/libexec/rpcd/luci.argon_update',
+        'usr/libexec/rpcd/luci.argon_appearance', 'usr/libexec/rpcd/luci.argon_branding',
+    }
+    for role, names in {
+        'client': ('5_hysteria2.lua', '6_ss-libev.lua', '7_naive.lua', '8_tuic.lua'),
+        'server': ('5_hysteria2.lua', '6_ss-libev.lua'),
+    }.items():
+        forbidden.update('usr/lib/lua/luci/model/cbi/passwall2/' + role + '/type/' + name for name in names)
+    forbidden.update('usr/lib/lua/luci/passwall2/' + name for name in
+                     ('util_hysteria2.lua', 'util_naiveproxy.lua', 'util_tuic.lua'))
+    required = {
+        'etc/config/luci': b'/luci-static/argon',
+        'www/luci-static/resources/view/system/system.js': None,
+        'usr/share/ucode/luci/template/themes/argon/header.ut': None,
+        'usr/share/ucode/luci/template/themes/argon/page_scripts.ut': None,
+        'www/luci-static/argon/css/cascade.css': None,
+        'usr/libexec/rpcd/luci.argon_wallpaper': None,
+    }
+    contents = {}
+    with tarfile.open(archive, 'r:*') as stream:
+        for member in stream:
+            path = PurePosixPath(member.name)
+            if path.is_absolute() or '..' in path.parts:
+                raise ValueError('unsafe product policy archive path')
+            name = str(path)
+            if name in forbidden or name.startswith('etc/boltwrt/migrations/'):
+                raise ValueError(f'retired product payload remains: {name}')
+            if name in required:
+                if name in contents or not member.isfile() or member.size > 4 * 1024**2:
+                    raise ValueError(f'invalid product policy payload: {name}')
+                contents[name] = stream.extractfile(member).read()
+    for name, token in required.items():
+        if not contents.get(name) or (token and token not in contents[name]):
+            raise ValueError(f'missing required fixed-theme payload: {name}')
+    if b'_mediaurlbase' in contents['www/luci-static/resources/view/system/system.js']:
+        raise ValueError('theme selector remains in actual system view')
+    for name in ('header.ut', 'page_scripts.ut'):
+        if b'argon-appearance' in contents['usr/share/ucode/luci/template/themes/argon/' + name]:
+            raise ValueError('appearance selector remains in actual theme template')
+    return {'upstream_backends_only': True, 'fixed_theme': 'argon',
+            'theme_controls': False, 'persistent_migration_backup': False,
+            'test_cleanup_hook': False}
+
+
 def sha256(path):
     with Path(path).open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
@@ -161,11 +215,13 @@ def main():
     packages = check_versions(args.manifest, policy)
     architecture = {"x86-64": "amd64", "cmcc-rax3000m": "arm64"}.get(args.target)
     programs = check_go_archive(args.rootfs, args.go_tool, baseline, architecture)
+    product_policy = check_product_policy(args.rootfs)
     record = {"rootfs": args.rootfs.name, "rootfs_sha256": sha256(args.rootfs),
               "manifest_sha256": sha256(args.manifest),
               "policy_sha256": sha256(args.policy),
               "source_lock_sha256": sha256(args.source_lock),
               "go_baseline": baseline, "packages": packages, "go_programs": programs,
+              "product_policy": product_policy,
               "scope": "actual packaged payload bytes and build information; no runtime acceptance"}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(record, indent=2) + "\n")

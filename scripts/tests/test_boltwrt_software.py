@@ -1,5 +1,7 @@
 import importlib.util
+import io
 from pathlib import Path
+import tarfile
 import tempfile
 import unittest
 
@@ -9,6 +11,45 @@ spec.loader.exec_module(software)
 
 
 class SoftwareTests(unittest.TestCase):
+    def policy_archive(self, root, extra=None):
+        entries = {
+            'etc/config/luci': b'option mediaurlbase /luci-static/argon',
+            'www/luci-static/resources/view/system/system.js': b'language settings',
+            'usr/share/ucode/luci/template/themes/argon/header.ut': b'theme header',
+            'usr/share/ucode/luci/template/themes/argon/page_scripts.ut': b'menu-argon',
+            'www/luci-static/argon/css/cascade.css': b'body{}',
+            'usr/libexec/rpcd/luci.argon_wallpaper': b'read-only rendering helper',
+        }
+        entries.update(extra or {})
+        path = root / 'rootfs.tar.gz'
+        with tarfile.open(path, 'w:gz') as archive:
+            for name, content in entries.items():
+                member = tarfile.TarInfo(name)
+                member.size = len(content)
+                archive.addfile(member, io.BytesIO(content))
+        return path
+
+    def test_product_payload_retains_renderer_without_theme_controls(self):
+        with tempfile.TemporaryDirectory() as directory:
+            archive = self.policy_archive(Path(directory))
+            self.assertEqual(software.check_product_policy(archive)['fixed_theme'], 'argon')
+
+    def test_stale_backend_or_test_cleanup_in_actual_payload_is_rejected(self):
+        for name in ('usr/bin/hysteria', 'etc/uci-defaults/94-boltwrt-migration-cleanup',
+                     'etc/boltwrt/migrations/4.0.1/passwall2',
+                     'www/luci-static/resources/view/argon-config.js'):
+            with self.subTest(path=name), tempfile.TemporaryDirectory() as directory:
+                archive = self.policy_archive(Path(directory), {name: b'stale file'})
+                with self.assertRaisesRegex(ValueError, 'retired product payload'):
+                    software.check_product_policy(archive)
+
+    def test_system_view_with_theme_selector_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            archive = self.policy_archive(Path(directory), {
+                'www/luci-static/resources/view/system/system.js': b'form.ListValue, _mediaurlbase'})
+            with self.assertRaisesRegex(ValueError, 'theme selector remains'):
+                software.check_product_policy(archive)
+
     def test_manifest_requires_the_fixed_downstream_package_release(self):
         policy = {name: {"version": "1.2.3"} for name in software.VERSION_PACKAGES}
         policy["passwall2"]["release"] = 2
