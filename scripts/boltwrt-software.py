@@ -10,7 +10,7 @@ import tarfile
 import tempfile
 
 GO_PROGRAMS = {
-    "usr/bin/xray", "usr/bin/sing-box", "usr/bin/hysteria",
+    "usr/bin/xray", "usr/bin/sing-box",
     "usr/bin/geoview", "usr/bin/v2ray-plugin", "usr/bin/frpc",
 }
 VERSION_PACKAGES = {
@@ -18,7 +18,6 @@ VERSION_PACKAGES = {
     "xray": ("xray-core",),
     "argon": ("luci-theme-argon",),
     "smartdns_luci": ("luci-app-smartdns",),
-    "shadowsocks-libev": ("shadowsocks-libev-ss-local", "shadowsocks-libev-ss-redir"),
     "shadowsocksr-libev": ("shadowsocksr-libev-ssr-local", "shadowsocksr-libev-ssr-redir"),
 }
 
@@ -65,10 +64,6 @@ def check_versions(manifest, policy):
         if actual is None or actual.split("-r", 1)[0] != policy[component] + ".1":
             raise ValueError(f"{name}: unexpected geodata version {actual}")
         checked[name] = actual
-    if "tuic-client" in packages:
-        if packages["tuic-client"].split("-r", 1)[0] != policy["tuic"]["version"]:
-            raise ValueError("unexpected TUIC version")
-        checked["tuic-client"] = packages["tuic-client"]
     return checked
 
 

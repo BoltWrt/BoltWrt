@@ -268,19 +268,19 @@ class PrepareTests(unittest.TestCase):
         self.assertEqual(roots, {"feeds/BoltWrt/luci-app-passwall2": "BoltWrt",
                                  "feeds/packages/net/haproxy": "packages"})
 
-    def test_independent_hysteria_choice_registers_locked_custom_provider(self):
+    def test_basic_core_choice_registers_locked_custom_provider(self):
         (self.root / "config/targets").mkdir(parents=True)
         (self.root / "config/targets/x86-64.txt").write_text("")
         (self.root / "config/common.txt").write_text(
-            "CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_Hysteria=y\nCONFIG_PACKAGE_hysteria=y\n")
-        indexes = {"packages": {"feeds/packages/net/hysteria": {"hysteria"}},
-                   "BoltWrt": {"feeds/BoltWrt/net/hysteria": {"hysteria"},
+            "CONFIG_PACKAGE_luci-app-passwall2_Basic_Core_All=y\nCONFIG_PACKAGE_xray-core=y\n")
+        indexes = {"packages": {"feeds/packages/net/xray-core": {"xray-core"}},
+                   "BoltWrt": {"feeds/BoltWrt/net/xray-core": {"xray-core"},
                                "feeds/BoltWrt/luci-app-passwall2": {"luci-app-passwall2"}}}
         winners, rejected = prepare.provider_plan(indexes)
         roots = prepare.product_roots(indexes, winners, prepare.positive_package_choices(self.root))
-        self.assertEqual(roots["feeds/BoltWrt/net/hysteria"], "BoltWrt")
-        self.assertIn("feeds/packages/net/hysteria", rejected)
-        self.assertNotIn("feeds/packages/net/hysteria", roots)
+        self.assertEqual(roots["feeds/BoltWrt/net/xray-core"], "BoltWrt")
+        self.assertIn("feeds/packages/net/xray-core", rejected)
+        self.assertNotIn("feeds/packages/net/xray-core", roots)
 
     def test_legacy_registration_preserved_and_scoped_registration_repeats(self):
         source = self.root / "feeds/packages/unused"

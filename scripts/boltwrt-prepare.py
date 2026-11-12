@@ -18,6 +18,24 @@ class PrepareError(RuntimeError):
 
 PATCHES = {
     "luci": {
+        # Keep language and table preferences, but expose no theme selector.
+        "modules/luci-mod-system/htdocs/luci-static/resources/view/system/system.js": [
+            ("""\t\to = s.taboption('language', form.ListValue, '_mediaurlbase', _('Design'))
+\t\to.uciconfig = 'luci';
+\t\to.ucisection = 'main';
+\t\to.ucioption = 'mediaurlbase';
+
+\t\tconst th = Object.keys(uci.get('luci', 'themes') || {}).sort();
+\t\tfor (let t of th)
+\t\t\tif (t.charAt(0) != '.')
+\t\t\t\to.value(uci.get('luci', 'themes', t), t);
+
+""", "")],
+        # Argon's locked product patch removes its settings and updater from
+        # the package payload. This hook runs for both staging and APK output.
+        "luci.mk": [
+            ("\t$(CP) $(PKG_INSTALL_DIR)/* $(1)/\n endif\nendef\n",
+             "\t$(CP) $(PKG_INSTALL_DIR)/* $(1)/\n endif\n\t$(call Package/$(PKG_NAME)/install-extra,$(1))\nendef\n")],
         "modules/luci-base/root/etc/config/luci": [
             ("option mediaurlbase /luci-static/bootstrap", "option mediaurlbase /luci-static/argon")],
         "collections/luci-nginx/Makefile": [

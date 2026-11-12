@@ -24,11 +24,9 @@ RAX_HARDWARE = {
 }
 BACKENDS = {
     "Haproxy": ("haproxy",),
-    "Shadowsocks_Libev_Client": ("shadowsocks-libev-ss-local", "shadowsocks-libev-ss-redir"),
     "Shadowsocks_Rust_Client": ("shadowsocks-rust-sslocal",),
     "ShadowsocksR_Libev_Client": ("shadowsocksr-libev-ssr-local", "shadowsocksr-libev-ssr-redir"),
     "Simple_Obfs": ("simple-obfs-client",),
-    "SingBox": ("sing-box",),
     "V2ray_Plugin": ("v2ray-plugin",),
 }
 MANIFEST_EXTRA = {"luci-base", "luci-app-samba4", "samba4-server", "wsdd2"}

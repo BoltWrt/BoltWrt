@@ -52,7 +52,8 @@ local function read(path) local f=assert(io.open(path,'rb'));local s=f:read('*a'
 local packages=assert(json.parse(read(directory .. '/packages.json')))
 local indexed={}
 for _,p in ipairs(packages) do assert(not indexed[p.name]); indexed[p.name]=p end
-assert(indexed['luci-app-passwall2'].version=='26.11.11-r3','wrong downstream PassWall2 release')
+local expected=os.getenv('BOLTWRT_TEST_RELEASE')=='4.1.0' and '26.11.11-r4' or '26.11.11-r3'
+assert(indexed['luci-app-passwall2'].version==expected,'wrong downstream PassWall2 release')
 local kernel=assert(indexed.kernel).version
 assert(kernel:match('^6%.12%.112~%x+%-r%d+$'),'unexpected packaged kernel ABI')
 local kmods=0

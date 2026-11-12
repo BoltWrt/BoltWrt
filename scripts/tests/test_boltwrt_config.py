@@ -34,7 +34,7 @@ class ConfigTests(unittest.TestCase):
     def verify(self, options, backends=()):
         # Product fragment deliberately contains INCLUDE only: guards must catch
         # the original failure even if explicit backend choice is lost later.
-        fragment = "".join(f"CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_{o}=y\n" for o in options)
+        fragment = "".join(f"CONFIG_PACKAGE_luci-app-passwall2_{o if o.startswith('Basic_Core_') else 'INCLUDE_' + o}=y\n" for o in options)
         (self.root / "config/common.txt").write_text(fragment)
         text = "".join(f"{k}={v}\n" for k, v in self.actual.items()) + fragment
         text += "".join(f"CONFIG_PACKAGE_{p}=y\n" for p in backends)
@@ -46,25 +46,31 @@ class ConfigTests(unittest.TestCase):
             self.verify(("Haproxy",))
         self.assertFalse((self.root / "logs/boltwrt/x86-64-config.json").exists())
 
-    def test_hysteria_include_rejects_singbox_without_independent_core(self):
-        with self.assertRaisesRegex(ValueError, "missing selected backend CONFIG_PACKAGE_hysteria=y"):
-            self.verify(("Hysteria", "SingBox"), ("sing-box",))
+    def test_removed_include_is_rejected_even_when_its_binary_is_absent(self):
+        with self.assertRaisesRegex(ValueError, "obsolete PassWall2 INCLUDE_Hysteria"):
+            self.verify(("Hysteria",), ("sing-box",))
 
-    def test_hysteria_and_singbox_backends_coexist(self):
-        self.verify(("Hysteria", "SingBox"), ("hysteria", "sing-box"))
+    def test_removed_binary_is_rejected_without_an_include(self):
+        for name in config.REMOVED_BACKENDS:
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, "excludes standalone backend"):
+                self.verify((), (name,))
 
-    def test_client_with_only_one_libev_binary_is_rejected(self):
-        with self.assertRaisesRegex(ValueError, "CONFIG_PACKAGE_shadowsocks-libev-ss-redir=y"):
-            self.verify(("Shadowsocks_Libev_Client",), ("shadowsocks-libev-ss-local",))
+    def test_basic_core_all_requires_both_registered_cores(self):
+        with self.assertRaisesRegex(ValueError, "CONFIG_PACKAGE_xray-core=y"):
+            self.verify(("Basic_Core_All",), ("sing-box",))
 
-    def test_seven_selected_client_options_with_actual_backends_pass(self):
-        self.verify(("Haproxy", "Shadowsocks_Libev_Client", "Shadowsocks_Rust_Client",
-                     "ShadowsocksR_Libev_Client", "Simple_Obfs", "SingBox", "V2ray_Plugin"),
-                    ("haproxy", "shadowsocks-libev-ss-local", "shadowsocks-libev-ss-redir",
+    def test_upstream_client_options_with_actual_backends_pass(self):
+        self.verify(("Haproxy", "Shadowsocks_Rust_Client",
+                     "ShadowsocksR_Libev_Client", "Simple_Obfs", "Basic_Core_All", "V2ray_Plugin"),
+                    ("haproxy", "xray-core",
                      "shadowsocks-rust-sslocal", "shadowsocksr-libev-ssr-local",
                      "shadowsocksr-libev-ssr-redir", "simple-obfs-client", "sing-box", "v2ray-plugin"))
         record = json.loads((self.root / "logs/boltwrt/x86-64-config.json").read_text())
         self.assertIn("haproxy", record["packages"])
+
+    def test_fixed_theme_rejects_a_second_theme(self):
+        with self.assertRaisesRegex(ValueError, "fixed-theme policy"):
+            self.verify((), ("luci-theme-argon", "luci-theme-bootstrap"))
 
     def test_disabled_includes_do_not_enable_extra_backends(self):
         self.verify(())

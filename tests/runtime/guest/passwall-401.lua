@@ -2,6 +2,7 @@
 -- Credentials below are public test values. Never run on a configured router.
 local mode = assert(arg[1], "expected prepare, verify or generate")
 local candidate_release = os.getenv("BOLTWRT_TEST_RELEASE") or "4.0.1"
+local upstream_policy = os.getenv("BOLTWRT_TEST_UPSTREAM_POLICY") == "1" or candidate_release ~= "4.0.1"
 local root = "/root/boltwrt-upgrade-fixture"
 local legacy = root .. "/legacy-400"
 local uci = require("uci").cursor()
@@ -99,7 +100,11 @@ elseif mode == "verify" then
     release(candidate_release)
     local old = require("uci").cursor(legacy, legacy .. "/state")
     for _,config in ipairs({"passwall2","passwall2_server"}) do
-        assert(read("/etc/boltwrt/migrations/4.0.1/" .. config) == read(legacy .. "/" .. config), "private original config backup differs")
+        if upstream_policy then
+            assert(not io.open("/etc/boltwrt/migrations/4.0.1/" .. config), "retired migration backup remains")
+        else
+            assert(read("/etc/boltwrt/migrations/4.0.1/" .. config) == read(legacy .. "/" .. config), "private original config backup differs")
+        end
         old:foreach(config, nil, function(section)
             local id = section[".name"]
             local migrated = config == "passwall2_server" and servers[id] ~= nil
@@ -107,6 +112,10 @@ elseif mode == "verify" then
             for key,value in pairs(section) do
                 if key:sub(1,1) ~= "." then
                     local expected=value
+                    if upstream_policy and key == "type" then
+                        if section.type == "Hysteria2" then expected="sing-box" end
+                        if section.type == "SS" then expected=config == "passwall2" and "SS-Rust" or "sing-box" end
+                    end
                     if key == "transport" and section.type == "Xray" and value == "tcp" then expected="raw" end
                     if migrated and key == "protocol" and section.type == "Xray" and value == "dokodemo-door" then expected="tunnel" end
                     if config == "passwall2" and id == "bw401_ws" and key == "ws_path" then expected="/ws?token=a%2Fb&ed=2048&eh=Sec-WebSocket-Protocol" end
@@ -149,14 +158,19 @@ elseif mode == "verify" then
         assert(uci:get("passwall2_server",accounts[1],"password")==case[2], "migrated authentication differs")
     end
     assert(not uci:get("passwall2_server","bw401_socks","users"), "anonymous SOCKS unexpectedly requires an account")
-    for _,id in ipairs({"bw401_ss","bw401_ssr","bw401_rust"}) do
+    if upstream_policy then
+        assert(uci:get("passwall2_server","bw401_ss","ss_password") == servers.bw401_ss.password)
+        local native_users=uci:get("passwall2_server","bw401_native","users")
+        assert(native_users and uci:get("passwall2_server",native_users[1],"password")=="fixture-native")
+    end
+    for _,id in ipairs(upstream_policy and {"bw401_ssr","bw401_rust"} or {"bw401_ss","bw401_ssr","bw401_rust"}) do
         local account=uci:get("passwall2_server",id,"user")
         assert(account and uci:get("passwall2_server",account,"password")==servers[id].password)
     end
     local before={read("/etc/config/passwall2"),read("/etc/config/passwall2_server")}
     assert(os.execute("lua /usr/share/passwall2/migrate_401.lua apply >/tmp/boltwrt-401-idempotence.log 2>&1")==0)
     assert(before[1]==read("/etc/config/passwall2") and before[2]==read("/etc/config/passwall2_server"), "second migration changed bytes")
-    print("PASS actual upgraded UCI: original options, identities, intent, credentials, collision, private backups and idempotence")
+    print("PASS actual upgraded UCI: identities, intent, credentials, collision and idempotence; " .. (upstream_policy and "upstream backend conversions and no persistent backup" or "historical private backups"))
 elseif mode == "verify-rollback" then
     release("4.0.0")
     for _,config in ipairs({"passwall2","passwall2_server"}) do
@@ -259,11 +273,12 @@ elseif mode == "generate" then
     options.node="bw401_singbox"; options.flag="bw401sb"; options.local_socks_port=19081
     write(directory .. "/client-singbox.json",require("luci.passwall2.util_sing-box").gen_config(options))
     options.node="bw401_hysteria"; options.local_socks_port=19082
-    write(directory .. "/client-hysteria.json",require("luci.passwall2.util_hysteria2").gen_config(options))
+    write(directory .. "/client-hysteria.json",require(upstream_policy and "luci.passwall2.util_sing-box" or "luci.passwall2.util_hysteria2").gen_config(options))
     write(directory .. "/client-ss-libev.json",require("luci.passwall2.util_shadowsocks").gen_config({
-        node="bw401_ss",local_addr="127.0.0.1",local_port=19085,mode="tcp_only"}))
+        node="bw401_ss",local_addr="127.0.0.1",local_port=19085,
+        local_socks_address="127.0.0.1",local_socks_port=19085,mode="tcp_only"}))
     write(directory .. "/inventory.json",json.stringify(inventory,1))
-    print("PASS actual shipped generators: " .. #ids .. " upgraded servers and Xray/Sing-Box/native Hysteria2/SS-libev clients, including a migrated TLS pin")
+    print("PASS actual generators: " .. #ids .. " upgraded servers, migrated clients and TLS pin; " .. (upstream_policy and "upstream backend policy" or "historical native backends"))
 else
     error("unexpected fixture mode")
 end
