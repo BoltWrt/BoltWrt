@@ -1,4 +1,11 @@
-# 4.0.1 runtime acceptance
+# Firmware runtime acceptance
+
+The x86 runner defaults to candidate release 4.1.0; pass `--release 4.0.1` for
+an earlier candidate. It records the expected release and passes it to native
+helpers as `BOLTWRT_TEST_RELEASE`. For the ARM command below, set that variable
+explicitly. The 4.0.0 baseline and `/etc/boltwrt/migrations/4.0.1/` migration ID
+remain unchanged. Preserve earlier 4.0.1 results under their original hashes;
+new tag-built firmware needs its own case and evidence directories.
 
 Run these checks in task-specific Docker containers. Build tools and runtime
 dependencies are described in [the source-build guide](../../tools/build/README.md).
@@ -25,7 +32,8 @@ the local test environment. No host port publication is needed.
 python3 /repo/tests/runtime/refresh_401.py \
   --case /cases/upgrade-bios --evidence /cases/evidence-upgrade-bios \
   --source /data/baseline/base-bios.vmdk --sha256 ORIGINAL_VMDK_SHA256 \
-  --upgrade-image /data/candidate/boltwrt-4.0.1-x86-64-generic-squashfs-combined.img.gz \
+  --release 4.1.0 \
+  --upgrade-image /data/candidate/boltwrt-4.1.0-x86-64-generic-squashfs-combined.img.gz \
   --upgrade-sha256 CANDIDATE_IMG_SHA256 --intent enabled \
   --apk /data/signed/luci-i18n-passwall2-zh-cn-26.11.11.apk \
   --rollback-image /data/baseline/base-bios.img.gz \
@@ -98,7 +106,7 @@ Stream each private input through `docker exec -i` into a root-owned container
 file with `umask 077`; `docker cp` can retain the original host UID.
 
 ```sh
-sh /testtools/arm-401.sh /tmp/legacy-400-fixture.tar.gz FIXTURE_SHA256 \
+BOLTWRT_TEST_RELEASE=4.1.0 sh /testtools/arm-401.sh /tmp/legacy-400-fixture.tar.gz FIXTURE_SHA256 \
   /tmp/luci-i18n-passwall2-zh-cn-26.11.11.apk /testtools
 ```
 

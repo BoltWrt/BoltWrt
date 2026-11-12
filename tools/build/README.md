@@ -52,6 +52,14 @@ The standard checksum list covers this published set. Generic MediaTek RAM
 loaders for other SoCs can remain in the SDK without creating references to
 unpublished files in the firmware archive.
 
+For a pushed version tag such as `v4.1.0`, CI passes `BOLTWRT_RELEASE_TAG` to
+the configuration and image checks. It sets `CONFIG_VERSION_NUMBER` before
+building; image names, version metadata and delivery files follow the actual
+tagged build. This does not rewrite tracked source files. The checked-in
+`config/version.txt` and `config/source-lock.json` also target 4.1.0 so manual
+builds use the same default. The earlier 4.0.1 candidate and its runtime results
+remain recorded under their original version and hashes.
+
 Archive each target's images, delivery bundle, checksum file and `logs/boltwrt/`
 before switching configurations. `build.json` records the source commit,
 locked feeds, downstream patches and actual payload checks. Its scope is build

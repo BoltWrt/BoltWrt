@@ -6,7 +6,7 @@ case "${1:-}" in '') run_all=1;; --tls-pin-only) run_all=0;; *) echo 'usage: pro
 [ "$(id -u)" = 0 ]
 [ -f /root/boltwrt-upgrade-fixture/legacy-400/passwall2_server ]
 . /etc/openwrt_release
-[ "$DISTRIB_RELEASE" = 4.0.1 ]
+[ "$DISTRIB_RELEASE" = "${BOLTWRT_TEST_RELEASE:-4.0.1}" ]
 directory=/tmp/boltwrt-401-generated
 [ -s "$directory/client-xray-tls.json" ]
 temporary=$(mktemp -d /tmp/boltwrt-401-proxy.XXXXXX)
