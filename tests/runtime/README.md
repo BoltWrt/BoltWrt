@@ -3,8 +3,9 @@
 The x86 runner defaults to candidate release 4.1.0; pass `--release 4.0.1` for
 an earlier candidate. It records the expected release and passes it to native
 helpers as `BOLTWRT_TEST_RELEASE`. For the ARM command below, set that variable
-explicitly. The 4.0.0 baseline and `/etc/boltwrt/migrations/4.0.1/` migration ID
-remain unchanged. Preserve earlier 4.0.1 results under their original hashes;
+explicitly. The 4.0.0 baseline remains unchanged. Current firmware retains no
+persistent migration backup and contains no test-candidate cleanup hook.
+Preserve earlier 4.0.1 results under their original hashes;
 new tag-built firmware needs its own case and evidence directories.
 
 Run these checks in task-specific Docker containers. Build tools and runtime

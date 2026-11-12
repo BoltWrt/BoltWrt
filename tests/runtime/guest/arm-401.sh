@@ -98,12 +98,17 @@ kill -0 "$rpcd_pid"
 sh /etc/uci-defaults/zz-passwall2-boltwrt-401 > "$report/migrate.log" 2>&1
 lua "$tools/passwall-401.lua" verify > "$report/migration-verify.log" 2>&1
 lua "$tools/passwall-401.lua" acl > "$report/acl-policy.log" 2>&1
-for name in passwall2 passwall2_server; do
-    [ "$(ls -ldn "/etc/boltwrt/migrations/4.0.1/$name" | awk '{print $1, $3, $4}')" = '-rw------- 0 0' ]
-done
-for path in /etc/boltwrt /etc/boltwrt/migrations /etc/boltwrt/migrations/4.0.1; do
-    [ "$(ls -ldn "$path" | awk '{print $1, $3, $4}')" = 'drwx------ 0 0' ]
-done
+if [ "$BOLTWRT_TEST_RELEASE" = 4.0.1 ]; then
+    for name in passwall2 passwall2_server; do
+        [ "$(ls -ldn "/etc/boltwrt/migrations/4.0.1/$name" | awk '{print $1, $3, $4}')" = '-rw------- 0 0' ]
+    done
+    for path in /etc/boltwrt /etc/boltwrt/migrations /etc/boltwrt/migrations/4.0.1; do
+        [ "$(ls -ldn "$path" | awk '{print $1, $3, $4}')" = 'drwx------ 0 0' ]
+    done
+else
+    [ ! -e /etc/boltwrt/migrations/4.0.1 ]
+    [ ! -e /etc/uci-defaults/94-boltwrt-migration-cleanup ]
+fi
 ubus -t 3 call uci get '{"config":"passwall2"}' > "$report/rpcd-uci.json"
 [ "$(jsonfilter -i "$report/rpcd-uci.json" -e '@.values.bw401_xray.transport')" = raw ]
 echo 'ARM_NATIVE_MIGRATION_AND_RPC_PASSED'
