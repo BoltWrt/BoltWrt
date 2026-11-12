@@ -1,0 +1,21 @@
+# Local UI checks share only the disposable QEMU container's network namespace.
+FROM node:24@sha256:64af3819f9275802414d7cdc38c27e9d82bd564dec4d4da87d008255d36c63b4
+ARG APT_MIRROR=https://mirrors.ustc.edu.cn
+RUN sed -i "s|http://deb.debian.org|${APT_MIRROR}|g; s|http://security.debian.org|${APT_MIRROR}|g" /etc/apt/sources.list.d/debian.sources \
+    && apt-get update --error-on=any \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends chromium ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /opt/boltwrt-browser
+RUN npm init -y >/dev/null \
+    && (npm install --ignore-scripts --omit=dev --save-exact --fetch-timeout=30000 --fetch-retries=1 \
+          --registry=https://registry.npmmirror.com puppeteer-core@25.16.0 \
+        || npm install --ignore-scripts --omit=dev --save-exact --fetch-timeout=30000 --fetch-retries=1 \
+          --registry=https://registry.npmjs.org puppeteer-core@25.16.0)
+ARG RUNTIME_UID=501
+ARG RUNTIME_GID=20
+RUN (getent group "${RUNTIME_GID}" || groupadd --gid "${RUNTIME_GID}" runtime) \
+    && (getent passwd "${RUNTIME_UID}" || useradd --uid "${RUNTIME_UID}" \
+        --gid "${RUNTIME_GID}" --home-dir /tmp --no-create-home runtime)
+COPY tests/runtime/browser_401.cjs /opt/boltwrt-browser/check.cjs
+USER ${RUNTIME_UID}:${RUNTIME_GID}
+ENTRYPOINT ["node", "/opt/boltwrt-browser/check.cjs"]

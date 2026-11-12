@@ -1,5 +1,5 @@
 #!/bin/sh
-# Run only inside an isolated, freshly booted official 3.1.2 x86 guest.
+# Run only inside an isolated, freshly booted official 3.1.2 or 4.0.0 x86 guest.
 # This creates a fixture and a preflight backup; it never flashes or reboots.
 set -eu
 export LC_ALL=C
@@ -9,24 +9,28 @@ fail() { echo "FIXTURE_PREPARE_FAILED: $*" >&2; exit 1; }
 trap 'rc=$?; [ "$rc" -eq 0 ] || echo "FIXTURE_PREPARE_INCOMPLETE: inspect this guest; do not reuse it as a completed fixture" >&2' EXIT
 [ "$(id -u)" = 0 ] || fail 'root required in the disposable guest'
 intent=${1:-}
-case "$intent" in enabled|disabled) ;; *) fail 'usage: prepare-312-fixture.sh enabled|disabled';; esac
+source_version=${2:-3.1.2}
+case "$intent/$source_version" in enabled/3.1.2|disabled/3.1.2|enabled/4.0.0|disabled/4.0.0) ;; *) fail 'usage: prepare-312-fixture.sh enabled|disabled [3.1.2|4.0.0]';; esac
 . /etc/openwrt_release
-[ "$DISTRIB_ID/$DISTRIB_RELEASE/$DISTRIB_TARGET" = 'BoltWrt/3.1.2/x86/64' ] || fail 'requires official BoltWrt 3.1.2 x86/64'
-for tool in uci openssl sha256sum ls awk sysupgrade opkg tar haproxy cmp mktemp sed grep; do
+[ "$DISTRIB_ID/$DISTRIB_RELEASE/$DISTRIB_TARGET" = "BoltWrt/$source_version/x86/64" ] || fail 'unexpected source release or target'
+for tool in uci openssl sha256sum ls awk sysupgrade tar haproxy cmp mktemp sed grep; do
     command -v "$tool" >/dev/null || fail "missing $tool"
 done
 root=/root/boltwrt-upgrade-fixture
 negative=/usr/local/boltwrt-upgrade-negative-control
 [ ! -e "$root" ] && [ ! -L "$root" ] || fail 'fixture directory already exists'
 [ ! -e "$negative" ] && [ ! -L "$negative" ] || fail 'negative control already exists'
-[ -f /usr/lib/opkg/status ] || fail 'old opkg database absent'
+case "$source_version" in
+    3.1.2) [ -f /usr/lib/opkg/status ] && command -v opkg >/dev/null || fail 'source opkg database/executable absent';;
+    4.0.0) [ -f /lib/apk/db/installed ] && command -v apk >/dev/null || fail 'source APK database/executable absent';;
+esac
 [ -x /etc/init.d/haproxy ] || fail 'old haproxy init absent'
 [ -f /rom/etc/haproxy.cfg ] && cmp -s /etc/haproxy.cfg /rom/etc/haproxy.cfg || fail 'haproxy config is not the untouched image default'
 for package in network system ddns sqm nginx luci; do
     [ -z "$(uci changes "$package")" ] || fail "pending UCI changes in $package"
 done
 [ "$(uci get network.lan)" = interface ] || fail 'LAN section missing'
-[ "$(uci get network.lan.ipaddr)" = 10.126.0.1 ] || fail 'unexpected management address'
+case "$(uci get network.lan.ipaddr)" in 10.126.0.1|10.126.0.1/18) ;; *) fail 'unexpected management address';; esac
 [ "$(uci get system.@system[0])" = system ] || fail 'system section absent'
 [ "$(uci get system.ntp)" = timeserver ] || fail 'named NTP section absent'
 [ "$(uci get nginx._lan)" = server ] || fail 'nginx LAN server absent'

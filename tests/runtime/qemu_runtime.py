@@ -105,6 +105,8 @@ def launch(args):
                f"hostfwd=tcp:127.0.0.1:{args.ssh_port}-10.126.0.1:22,"
                f"hostfwd=tcp:127.0.0.1:{args.http_port}-10.126.0.1:80,"
                f"hostfwd=tcp:127.0.0.1:{args.https_port}-10.126.0.1:443")
+    if getattr(args, "restrict_network", False):
+        network += ",restrict=on"
     command += ["-netdev", network, "-device", device + ",netdev=lan"]
     record = {"source": str(source), "source_sha256": args.sha256,
               "disk_info": info, "command": command, "arch": args.arch,
@@ -274,6 +276,8 @@ def main():
     start.add_argument("--efi-code", type=Path)
     start.add_argument("--efi-vars", type=Path)
     start.add_argument("--memory", type=int, default=768)
+    start.add_argument("--restrict-network", action="store_true",
+                       help="isolate the guest from external destinations while retaining management forwards")
     for name, port in (("ssh", 2223), ("http", 8081), ("https", 8444)):
         start.add_argument("--" + name + "-port", type=int, default=port)
     run = actions.add_parser("exec")

@@ -85,13 +85,15 @@ PATCHES = {
              "\n")],
     },
     "packages": {
-        # GO-2026-6809 / CVE-2026-111943: keep the locked 1.26 series and
-        # rebuild every Go payload with the intermediate-certificate denylist.
-        # Official go1.26.10 source: 4e8c85f5319d999bfd7617fdc191631e5634e3c5.
-        "lang/golang/golang1.26/Makefile": [
-            ("GO_VERSION_PATCH:=9\n", "GO_VERSION_PATCH:=10\n"),
-            ("PKG_HASH:=9735d7dcdb65b35d3fa577f04064737c03b89cf1a2b71e6e69fe2f3c6f9fd4ca\n",
-             "PKG_HASH:=fd63e883ba2f2bfca93c1646b31ebef63e2b1e4d2b317c9789d976a68d81f36f\n")],
+        # Build every Go payload with the same patched compiler. Explicit
+        # golang1.27/host dependencies resolve to this same compiler instance.
+        "lang/golang/golang-values.mk": [
+            ("GO_DEFAULT_VERSION:=1.26\n", "GO_DEFAULT_VERSION:=1.27\n")],
+        "lang/golang/golang/Makefile": [
+            ("include ../golang-values.mk\n", "include ../golang-values.mk\n\nSCAN_DEPS:=../golang-values.mk\n")],
+        "lang/rust/Makefile": [
+            ("PKG_SOURCE_URL:=https://static.rust-lang.org/dist/\n",
+             "PKG_SOURCE_URL:=https://rsproxy.cn/dist/ https://static.rust-lang.org/dist/\n")],
         "net/nginx-util/src/nginx-ssl-util.hpp": [
             ("/C=ZZ/ST=Somewhere/L=None/CN=OpenWrt/O=OpenWrt",
              "/C=CN/ST=Beijing/L=Beijing/CN=BoltWrt/O=BoltWrt"),
@@ -360,6 +362,47 @@ def positive_package_choices(root):
     return choices
 
 
+def verify_toolchains(root, lock):
+    """Reject a default compiler that differs from the declared build baseline."""
+    version = lock.get("toolchains", {}).get("golang")
+    if version is None:
+        return {}
+    if not isinstance(version, str) or not re.fullmatch(r"1\.[0-9]+\.[0-9]+", version):
+        raise PrepareError("invalid locked Go compiler version")
+    series, patch = version.rsplit(".", 1)
+    base = root / "feeds/packages/lang/golang"
+    values = (base / "golang-values.mk").read_text()
+    defaults = re.findall(r"^GO_DEFAULT_VERSION:=(.+)$", values, re.M)
+    recipe = (base / ("golang" + series) / "Makefile").read_text()
+    major_minor = re.findall(r"^GO_VERSION_MAJOR_MINOR:=(.+)$", recipe, re.M)
+    patches = re.findall(r"^GO_VERSION_PATCH:=(.+)$", recipe, re.M)
+    if defaults != [series] or major_minor != [series] or patches != [patch]:
+        raise PrepareError(f"Go compiler differs from locked unified baseline {version}")
+    return {"golang": {"version": version, "default_series": series,
+                       "recipe_sha256": hashlib.sha256(recipe.encode()).hexdigest()}}
+
+
+def verify_toolchain_metadata(root, toolchains):
+    """Included makefiles must affect the real cached dependency graph too."""
+    if "golang" not in toolchains:
+        return
+    go = toolchains["golang"]
+    expected = "golang" + go["default_series"] + "/host"
+    hashes = {}
+    for relative, source in (
+        ("feeds/packages.index", "feeds/packages/lang/golang/golang/Makefile"),
+        ("tmp/.packageinfo", "package/feeds/packages/golang/Makefile"),
+    ):
+        text = (root / relative).read_text()
+        blocks = re.findall(r"^Source-Makefile: " + re.escape(source) +
+                            r"\n(.*?)(?=^Source-Makefile: |\Z)", text, re.M | re.S)
+        dependencies = re.findall(r"^Build-Depends/host: (.+)$", blocks[0], re.M) if len(blocks) == 1 else []
+        if dependencies != [expected]:
+            raise PrepareError(f"{relative}: cached Go host dependency differs from {expected}")
+        hashes[relative] = hashlib.sha256(text.encode()).hexdigest()
+    go["metadata_sha256"] = hashes
+
+
 def product_roots(indexes, winners, choices):
     return {source: feed for source, feed in winners.items()
             if feed == "BoltWrt" or indexes[feed][source] & choices}
@@ -490,6 +533,7 @@ def prepare(root, local_feed=None):
             if path.read_bytes() != content:
                 atomic_write(path, content)
             patch_hashes[str(path.relative_to(root))] = hashlib.sha256(content).hexdigest()
+    toolchains = verify_toolchains(root, lock)
     env, failures = make_environment(root)
     # feeds update -i can itself run make defconfig. Reject stray build sources
     # before that first metadata scan, then tighten to the actual feed indexes.
@@ -513,9 +557,11 @@ def prepare(root, local_feed=None):
     if (root / ".config").exists():
         checked_make(root, env, "defconfig")
     verify_links(root, winners, rejected, required_sources=roots)
+    verify_toolchain_metadata(root, toolchains)
     installed = {source: feed for source, feed in winners.items()
                  if (root / "package/feeds" / feed / Path(source).name).is_symlink()}
     evidence = {"source_lock_sha256": hashlib.sha256(lock_path.read_bytes()).hexdigest(),
+                "toolchains": toolchains,
                 "feeds": records, "patched_files_sha256": patch_hashes,
                 "registration_scope": scope, "requested_root_providers": roots,
                 "selected_providers": installed, "excluded_overlapping_sources": rejected}

@@ -8,7 +8,8 @@ fail() { echo "FRESH_CHECK_FAILED: phase=$phase $*" >&2; exit 1; }
 trap 'rc=$?; if [ "$rc" -ne 0 ]; then echo "FRESH_CHECK_INCOMPLETE: phase=$phase exit=$rc" >&2; fi' EXIT
 [ "$(id -u)" = 0 ] || fail 'root required in the disposable guest'
 expected=${1:-}
-case "$expected" in x86/64|armsr/armv8) ;; *) fail 'usage: verify-fresh.sh x86/64|armsr/armv8';; esac
+release=${2:-4.0.0}
+case "$expected/$release" in x86/64/4.0.0|x86/64/4.0.1|armsr/armv8/4.0.0|armsr/armv8/4.0.1) ;; *) fail 'usage: verify-fresh.sh x86/64|armsr/armv8 [4.0.0|4.0.1]';; esac
 for tool in uci ubus jsonfilter apk nginx pidof tr awk grep readlink uname; do
     command -v "$tool" >/dev/null || fail "missing required tool: $tool"
 done
@@ -38,14 +39,14 @@ mounted() {
 
 phase=identity
 . /etc/openwrt_release
-[ "$DISTRIB_ID/$DISTRIB_RELEASE/$DISTRIB_TARGET" = "BoltWrt/4.0.0/$expected" ] || fail 'unexpected release or target'
+[ "$DISTRIB_ID/$DISTRIB_RELEASE/$DISTRIB_TARGET" = "BoltWrt/$release/$expected" ] || fail 'unexpected release or target'
 [ "$(uname -r)" = 6.12.112 ] || fail 'unexpected running kernel'
 [ "$(cat /proc/1/comm)" = procd ] || fail 'PID1 is not procd'
 [ "$(readlink /proc/1/exe)" = /sbin/procd ] || fail 'PID1 executable is not target procd'
 case "$expected/$(uname -m)" in x86/64/x86_64|armsr/armv8/aarch64) ;; *) fail 'unexpected running architecture';; esac
 boot_id=$(cat /proc/sys/kernel/random/boot_id)
 printf '%s\n' "$boot_id" | grep -Eq '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' || fail 'invalid boot ID'
-printf 'IDENTITY target=%s release=4.0.0 kernel=6.12.112 pid1=procd boot_id=%s\n' "$expected" "$boot_id"
+printf 'IDENTITY target=%s release=%s kernel=6.12.112 pid1=procd boot_id=%s\n' "$expected" "$release" "$boot_id"
 
 phase=mounts
 case "$expected" in
