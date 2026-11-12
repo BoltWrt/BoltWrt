@@ -9,7 +9,7 @@ trap 'rc=$?; if [ "$rc" -ne 0 ]; then echo "FRESH_CHECK_INCOMPLETE: phase=$phase
 [ "$(id -u)" = 0 ] || fail 'root required in the disposable guest'
 expected=${1:-}
 release=${2:-4.0.0}
-case "$expected/$release" in x86/64/4.0.0|x86/64/4.0.1|armsr/armv8/4.0.0|armsr/armv8/4.0.1) ;; *) fail 'usage: verify-fresh.sh x86/64|armsr/armv8 [4.0.0|4.0.1]';; esac
+case "$expected/$release" in x86/64/4.0.0|x86/64/4.0.1|x86/64/4.1.0|armsr/armv8/4.0.0|armsr/armv8/4.0.1|armsr/armv8/4.1.0) ;; *) fail 'usage: verify-fresh.sh x86/64|armsr/armv8 [4.0.0|4.0.1|4.1.0]';; esac
 for tool in uci ubus jsonfilter apk nginx pidof tr awk grep readlink uname; do
     command -v "$tool" >/dev/null || fail "missing required tool: $tool"
 done

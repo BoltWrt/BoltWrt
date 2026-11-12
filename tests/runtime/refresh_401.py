@@ -29,7 +29,8 @@ GUEST = Path(__file__).with_name("guest")
 class Case:
     def __init__(self, args):
         self.args = args
-        self.results = {"status": "running", "steps": {}, "boot_ids": [],
+        self.results = {"status": "running", "candidate_release": args.release,
+                        "steps": {}, "boot_ids": [],
                         "tooling_sha256": {
                             "refresh_401.py": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                             "qemu_runtime.py": hashlib.sha256(Path(qemu.__file__).read_bytes()).hexdigest(),
@@ -44,6 +45,7 @@ class Case:
 
     def step(self, label, command, *, payload=None, timeout=180):
         self.phase = label
+        command = "export BOLTWRT_TEST_RELEASE=" + shlex.quote(self.args.release) + "\n" + command
         result = self.ssh(command, payload=payload, timeout=timeout)
         (self.args.evidence / (label + ".log")).write_bytes(result.stdout + result.stderr)
         self.results["steps"][label] = {"returncode": result.returncode}
@@ -234,7 +236,7 @@ tar -czf - "$@"
         self.verify_packages(label + "-packages")
         for name in ("verify-upgrade-fixture.sh", "passwall-401.lua"):
             self.upload(GUEST / name, "/tmp/" + name)
-        self.step(label + "-settings", f"sh /tmp/verify-upgrade-fixture.sh {self.args.intent} 4.0.1")
+        self.step(label + "-settings", f"sh /tmp/verify-upgrade-fixture.sh {self.args.intent} {self.args.release}")
         self.step(label + "-passwall", "lua /tmp/passwall-401.lua verify")
         self.step(label + "-acl-policy", "lua /tmp/passwall-401.lua acl")
         self.step(label + "-migration-backup", """set -eu
@@ -279,7 +281,7 @@ echo 'Private migration originals are included in ordinary sysupgrade backups.'
             label="refresh-401-public-key-bootstrap"), bytearray())
         qemu.save(args.evidence / "bootstrap.json", result)
         assert result["returncode"] == 0
-        source_release = "4.0.0" if args.upgrade_image else "4.0.1"
+        source_release = "4.0.0" if args.upgrade_image else args.release
         boot = self.ready(source_release)
         self.step("set-test-password", "passwd root >/dev/null 2>&1", payload=(self.password + "\n") .encode() * 2)
         self.identity_command = "set -e; grep '^root:' /etc/shadow | sha256sum; sha256sum /etc/dropbear/authorized_keys; for path in /etc/dropbear/*_host_key; do [ ! -f \"$path\" ] || sha256sum \"$path\"; done"
@@ -303,7 +305,7 @@ echo 'Private migration originals are included in ordinary sysupgrade backups.'
             self.phase = "normal-sysupgrade"
             trigger = self.ssh("nohup /sbin/sysupgrade /tmp/boltwrt-401.img.gz >/tmp/boltwrt-upgrade.log 2>&1 </dev/null &", timeout=30)
             assert trigger.returncode in (0, 255)
-            boot = self.ready("4.0.1", previous=boot)
+            boot = self.ready(args.release, previous=boot)
             self.verify_upgrade("after-upgrade")
             self.step("generate-core-configs", "umask 077; lua /tmp/passwall-401.lua generate")
             self.upload(GUEST / "proxy-401.sh", "/tmp/proxy-401.sh")
@@ -318,18 +320,18 @@ echo 'Private migration originals are included in ordinary sysupgrade backups.'
         else:
             self.verify_packages("fresh-packages")
             self.upload(GUEST / "verify-fresh.sh", "/tmp/verify-fresh.sh")
-            self.step("fresh-local", "sh /tmp/verify-fresh.sh x86/64 4.0.1")
+            self.step("fresh-local", f"sh /tmp/verify-fresh.sh x86/64 {args.release}")
             self.web("fresh-web", upgraded=False)
         self.phase = "real-reboot"
         trigger = self.ssh("nohup /sbin/reboot >/tmp/boltwrt-reboot.log 2>&1 </dev/null &")
         assert trigger.returncode in (0, 255)
-        boot = self.ready("4.0.1", previous=boot)
+        boot = self.ready(args.release, previous=boot)
         if args.upgrade_image:
             self.verify_upgrade("after-reboot")
         else:
             self.verify_packages("rebooted-fresh-packages")
             self.upload(GUEST / "verify-fresh.sh", "/tmp/verify-fresh.sh")
-            self.step("rebooted-fresh-local", "sh /tmp/verify-fresh.sh x86/64 4.0.1")
+            self.step("rebooted-fresh-local", f"sh /tmp/verify-fresh.sh x86/64 {args.release}")
             self.web("rebooted-fresh-web", upgraded=False)
         if args.rollback_image:
             self.upload(args.rollback_image, "/tmp/boltwrt-400.img.gz")
@@ -360,6 +362,8 @@ def main():
     for name in ("case", "evidence", "source"):
         parser.add_argument("--" + name, required=True, type=Path)
     parser.add_argument("--sha256", required=True)
+    parser.add_argument("--release", choices=("4.0.1", "4.1.0"), default="4.1.0",
+                        help="expected candidate release; the upgrade baseline remains 4.0.0")
     parser.add_argument("--upgrade-image", type=Path)
     parser.add_argument("--upgrade-sha256")
     parser.add_argument("--intent", choices=("enabled", "disabled"), default="enabled")

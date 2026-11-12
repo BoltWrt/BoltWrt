@@ -8,7 +8,7 @@ fail() { echo "UPGRADE_FIXTURE_FAILED: $*" >&2; exit 1; }
 [ "$(id -u)" = 0 ] || fail 'root required in the disposable guest'
 intent=${1:-}
 release=${2:-4.0.0}
-case "$intent/$release" in enabled/4.0.0|disabled/4.0.0|enabled/4.0.1|disabled/4.0.1) ;; *) fail 'usage: verify-upgrade-fixture.sh enabled|disabled [4.0.0|4.0.1]';; esac
+case "$intent/$release" in enabled/4.0.0|disabled/4.0.0|enabled/4.0.1|disabled/4.0.1|enabled/4.1.0|disabled/4.1.0) ;; *) fail 'usage: verify-upgrade-fixture.sh enabled|disabled [4.0.0|4.0.1|4.1.0]';; esac
 . /etc/openwrt_release
 [ "$DISTRIB_ID/$DISTRIB_RELEASE/$DISTRIB_TARGET" = "BoltWrt/$release/x86/64" ] || fail 'unexpected upgraded release or target'
 root=/root/boltwrt-upgrade-fixture

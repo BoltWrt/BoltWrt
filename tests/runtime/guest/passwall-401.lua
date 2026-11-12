@@ -1,6 +1,7 @@
--- Native-UCI fixture for a disposable official 4.0.0 -> 4.0.1 upgrade.
+-- Native-UCI fixture for a disposable official 4.0.0 -> candidate upgrade.
 -- Credentials below are public test values. Never run on a configured router.
 local mode = assert(arg[1], "expected prepare, verify or generate")
+local candidate_release = os.getenv("BOLTWRT_TEST_RELEASE") or "4.0.1"
 local root = "/root/boltwrt-upgrade-fixture"
 local legacy = root .. "/legacy-400"
 local uci = require("uci").cursor()
@@ -95,7 +96,7 @@ if mode == "prepare" then
     end
     print("PASS seeded official 4.0.0 native UCI fixture: " .. #ids .. " servers, five client types, a TLS certificate pin and an existing account collision")
 elseif mode == "verify" then
-    release("4.0.1")
+    release(candidate_release)
     local old = require("uci").cursor(legacy, legacy .. "/state")
     for _,config in ipairs({"passwall2","passwall2_server"}) do
         assert(read("/etc/boltwrt/migrations/4.0.1/" .. config) == read(legacy .. "/" .. config), "private original config backup differs")
@@ -166,7 +167,7 @@ elseif mode == "verify-rollback" then
     assert(uci:get("passwall2","bw401_singbox","method")=="aes-128-gcm")
     print("PASS ordinary firmware rollback with the original 4.0.0 backup: native config bytes and legacy schema restored")
 elseif mode == "acl" then
-    release('4.0.1')
+    release(candidate_release)
     assert(uci:get('passwall2','bw401_acl_global','mode')=='2','use the fixture with legacy ACLs')
     local json=require('luci.jsonc')
     local original=read('/etc/config/passwall2')
@@ -217,7 +218,7 @@ api.TMP_ACL_PATH=assert(arg[1]);dofile('/usr/share/passwall2/app_acl.lua')]])
     assert(ok,message)
     print('PASS native shipped ACL builder: disabled intent, live global port inheritance, shared and independent explicit nodes')
 elseif mode == "generate" then
-    release("4.0.1")
+    release(candidate_release)
     local json = require("luci.jsonc")
     local api = require("luci.passwall2.api")
     local digest_bytes=""; local digest_hex=""
