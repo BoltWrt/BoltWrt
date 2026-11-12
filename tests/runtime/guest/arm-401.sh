@@ -6,7 +6,8 @@ export LC_ALL=C
 umask 077
 [ -f /.dockerenv ] && [ "$(id -u)" = 0 ] && [ "$(uname -m)" = aarch64 ]
 . /etc/openwrt_release
-[ "$DISTRIB_ID/$DISTRIB_RELEASE/$DISTRIB_TARGET" = BoltWrt/4.0.1/mediatek/filogic ]
+export BOLTWRT_TEST_RELEASE=${BOLTWRT_TEST_RELEASE:-4.0.1}
+[ "$DISTRIB_ID/$DISTRIB_RELEASE/$DISTRIB_TARGET" = "BoltWrt/$BOLTWRT_TEST_RELEASE/mediatek/filogic" ]
 fixture=${1:?provide the private original 4.0.0 ARM fixture archive}
 fixture_sha256=${2:?provide the verified fixture SHA256}
 signed_apk=${3:?provide the matching signed delivery translation APK}

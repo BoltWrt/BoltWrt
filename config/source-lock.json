@@ -1,5 +1,5 @@
 {
-  "version": "4.0.1",
+  "version": "4.1.0",
   "toolchains": {
     "golang": "1.27.4"
   },
@@ -41,7 +41,7 @@
     "BoltWrt": {
       "type": "src-git",
       "url": "https://github.com/BoltWrt/Packages.git",
-      "commit": "cbcdb6f0346ac0c151e8904956c1b1bf85dd251f",
+      "commit": "c7314ada935511204ed29548ec4c14a1bc773d11",
       "patch_manifest": "compat/openwrt-25.12.json"
     }
   },

@@ -4,7 +4,7 @@ set -eu
 umask 077
 [ "$(id -u)" = 0 ] && [ -d /rom ] && [ -d /proc/1 ]
 . /etc/openwrt_release
-[ "$DISTRIB_RELEASE/$DISTRIB_TARGET" = 4.0.1/x86/64 ]
+[ "$DISTRIB_RELEASE/$DISTRIB_TARGET" = "${BOLTWRT_TEST_RELEASE:-4.0.1}/x86/64" ]
 [ "$(uci -q get passwall2.@global[0].enabled)" = 0 ]
 [ "$(uci -q get passwall2_server.@global[0].enable)" = 0 ]
 [ "$(uci -q get passwall2.bw401_xray_tls.transport)" = raw ]
