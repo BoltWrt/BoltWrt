@@ -22,6 +22,7 @@ from types import SimpleNamespace
 import urllib.parse
 
 import qemu_runtime as qemu
+from apk_fixture import write_fixture
 
 GUEST = Path(__file__).with_name("guest")
 
@@ -322,8 +323,12 @@ echo 'No persistent migration credential copies remain.'
             self.step("client-init-nft-dns-reload", "sh /tmp/client-init-401.sh", timeout=300)
             if args.apk:
                 self.upload(args.apk, "/tmp/boltwrt-translation.apk")
+                tampered = args.case / "tampered-signed-metadata.apk"
+                proof = write_fixture(args.apk, tampered)
+                qemu.save(args.evidence / "apk-tamper-fixture.json", proof)
+                self.upload(tampered, "/tmp/boltwrt-translation-tampered.apk")
                 self.upload(GUEST / "apk-trust-401.sh", "/tmp/apk-trust-401.sh")
-                self.step("native-apk-trust", "sh /tmp/apk-trust-401.sh /tmp/boltwrt-translation.apk", timeout=180)
+                self.step("native-apk-trust", "sh /tmp/apk-trust-401.sh /tmp/boltwrt-translation.apk /tmp/boltwrt-translation-tampered.apk", timeout=180)
             self.capture_runtime("before-reboot")
         else:
             self.verify_packages("fresh-packages")
