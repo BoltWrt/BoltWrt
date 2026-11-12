@@ -77,11 +77,21 @@ QMP exits the disposable VM.
 
 After the RAX source build and image/software/delivery checks pass, import the
 actual generated ARM64 rootfs into a dedicated Docker image. Start a disposable
-root container with `--network none`, `--cap-drop ALL`,
+root container with `--network bridge`, `--cap-drop ALL --cap-add NET_RAW`,
 `--security-opt no-new-privileges` and a read-only `/testtools` mount of
 `tests/runtime/guest/`. Copy the private original-4.0.0 fixture archive and the
 matching signed translation APK into that container; do not relax permissions
 on host-owned private fixture files.
+
+The native container needs a default interface for the shipped Sing-Box
+automatic interface detection. A loopback-only `--network none` container
+reports `network: missing default interface`. Use Docker's existing bridge
+without publishing host ports. The checks use loopback peers and numeric
+loopback targets; they do not need an external proxy or production endpoint.
+`NET_RAW` permits the shipped Sing-Box interface/socket binding; dropping it
+produced `dial tcp 127.0.0.1:19101: operation not permitted` on this Docker
+kernel. No other capabilities are required by this native test.
+The original-image `sysupgrade -T` check below can keep `--network none`.
 
 With all capabilities dropped, root cannot read a host-owned mode-0600 file.
 Stream each private input through `docker exec -i` into a root-owned container

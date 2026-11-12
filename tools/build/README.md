@@ -89,3 +89,6 @@ The [runtime acceptance guide](../../tests/runtime/README.md) describes the
 minimum BIOS/UEFI matrix, original-backup rollback, native ARM64 userland checks
 and isolated Chromium rendering. Keep these results alongside the exact
 candidate's build and package manifests.
+
+The [4.0.1 candidate acceptance record](acceptance-4.0.1.md) records the actual
+source commits, artifact hashes, completed Docker cases and their scope.
