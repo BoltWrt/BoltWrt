@@ -84,6 +84,24 @@ class DeliveryTests(unittest.TestCase):
         self.assertIn('config.buildinfo', standard.read_text())
         self.assertNotIn('sha256sums', standard.read_text())
 
+    def test_rax_standard_checksums_only_reference_published_files(self):
+        image = self.root / 'boltwrt-fixture-sysupgrade.itb'
+        image.write_bytes(b'RAX fixture image')
+        metadata = self.root / 'profiles.json'
+        metadata.write_bytes(b'RAX profiles')
+        loader = self.root / 'mt7988-ram-ddr4-bl2.bin'
+        loader.write_bytes(b'unpublished generic MediaTek loader')
+        standard = self.root / 'sha256sums'
+        standard.write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest() + '  ' + p.name + '\n'
+                                   for p in (image, metadata, loader)))
+        delivery.update_checksums(self.root, 'boltwrt-fixture')
+        names = {line.split('  ', 1)[1] for line in standard.read_text().splitlines()}
+        self.assertEqual(names, {image.name, metadata.name, 'boltwrt-fixture-SHA256SUMS'})
+        self.assertTrue(loader.exists())
+        for line in standard.read_text().splitlines():
+            digest, name = line.split('  ', 1)
+            self.assertEqual(digest, hashlib.sha256((self.root / name).read_bytes()).hexdigest())
+
     def test_standard_checksum_cannot_read_outside_artifacts_or_create_a_cycle(self):
         standard = self.root / 'sha256sums'
         for name in ('../private-key.pem', 'sha256sums'):

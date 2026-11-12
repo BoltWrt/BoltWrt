@@ -42,6 +42,10 @@ def update_checksums(directory, prefix):
     if checksum.is_symlink():
         raise ValueError("delivery checksum output must not be a symlink")
     checksum.write_text("".join(f"{sha256(path)}  {path.name}\n" for path in files))
+    # Match the firmware upload set. MediaTek builds also produce generic RAM
+    # loaders for other SoCs; those remain in the SDK but are not in the release.
+    metadata = {"profiles.json", "config.buildinfo", "feeds.buildinfo", "version.buildinfo"}
+    names.intersection_update({path.name for path in files} | metadata | {checksum.name})
     names.update(path.name for path in files)
     names.add(checksum.name)
     # This list includes the product list and ordinary OpenWrt build metadata;
