@@ -56,10 +56,12 @@ The minimum matrix is:
 Fresh cases check default configuration and running services, root-password
 login, the served TLS certificate, Argon assets and component-update POST/CSRF
 behavior. Upgrade cases add ordinary configuration-preserving `sysupgrade`
-without `-F`, identity and configuration retention, private migration backups,
-17 migrated server configurations, 13 real Xray/Sing-Box configuration checks,
-local proxy traffic and a wrong-certificate-pin rejection. Native Hysteria2 and
-SS-libev also run through the shipped PassWall2 client dispatcher. The signed
+without `-F`, identity and configuration retention, absence of retired migration
+backups, migrated server configurations, real Xray/Sing-Box configuration checks,
+local proxy traffic and a wrong-certificate-pin rejection. Migrated Hysteria2
+and SS nodes also run through the upstream Sing-Box/SS-Rust client dispatcher.
+Explicit `--release 4.0.1` retains the historical candidate's expectations;
+never count its earlier acceptance as evidence for the new policy. The signed
 translation APK is strictly verified, a tampered copy is rejected, and a native
 remove/reinstall transaction must preserve package inventory and trusted keys.
 Legacy ACL checks exercise global-off intent, dynamic inherited ports and

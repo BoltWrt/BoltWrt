@@ -108,13 +108,23 @@ dispatcher() {
 if [ "$run_all" = 1 ]; then
     proxy xray-vless 19080 /usr/bin/xray run -c "$directory/client-xray.json"
     proxy singbox-shadowsocks 19081 /usr/bin/sing-box run -c "$directory/client-singbox.json"
-    proxy native-hysteria2 19082 /usr/bin/hysteria -c "$directory/client-hysteria.json" client
+    if [ "${BOLTWRT_TEST_UPSTREAM_POLICY:-0}" = 1 ] || [ "${BOLTWRT_TEST_RELEASE:-4.0.1}" != 4.0.1 ]; then
+        proxy migrated-hysteria2 19082 /usr/bin/sing-box run -c "$directory/client-hysteria.json"
+    else
+        proxy native-hysteria2 19082 /usr/bin/hysteria -c "$directory/client-hysteria.json" client
+    fi
 fi
 proxy xray-migrated-certificate-pin 19083 /usr/bin/xray run -c "$directory/client-xray-tls.json"
 if [ "$run_all" = 1 ]; then
-    proxy upgraded-ss-libev 19085 /usr/bin/ss-local -c "$directory/client-ss-libev.json"
-    dispatcher native-hysteria2 bw401_hysteria 19086
-    dispatcher ss-libev bw401_ss 19087
+    if [ "${BOLTWRT_TEST_UPSTREAM_POLICY:-0}" = 1 ] || [ "${BOLTWRT_TEST_RELEASE:-4.0.1}" != 4.0.1 ]; then
+        proxy migrated-ss-rust 19085 /usr/bin/sslocal -c "$directory/client-ss-libev.json"
+        dispatcher migrated-hysteria2 bw401_hysteria 19086
+        dispatcher migrated-ss-rust bw401_ss 19087
+    else
+        proxy upgraded-ss-libev 19085 /usr/bin/ss-local -c "$directory/client-ss-libev.json"
+        dispatcher native-hysteria2 bw401_hysteria 19086
+        dispatcher ss-libev bw401_ss 19087
+    fi
 fi
 
 # The negative control differs only in the certificate pin and local SOCKS port.

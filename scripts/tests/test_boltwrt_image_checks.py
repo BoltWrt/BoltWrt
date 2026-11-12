@@ -164,8 +164,8 @@ class DiskChecks(unittest.TestCase):
 # chains, not generated from the verifier's required-package constants.
 BASE_PACKAGES = '''apk-mbedtls boltwrt-defaults dnsmasq-full smartdns luci-app-smartdns
 ddns-scripts ddns-scripts-aliyun ddns-scripts-services luci-app-ddns
-luci-app-passwall2 haproxy hysteria sing-box xray-core geoview v2ray-plugin v2ray-geoip v2ray-geosite
-shadowsocks-rust-sslocal shadowsocks-libev-ss-local shadowsocks-libev-ss-redir
+luci-app-passwall2 haproxy sing-box xray-core geoview v2ray-plugin v2ray-geoip v2ray-geosite
+shadowsocks-rust-sslocal
 shadowsocksr-libev-ssr-local shadowsocksr-libev-ssr-redir simple-obfs-client
 sqm-scripts luci-app-sqm kmod-sched-cake kmod-ifb miniupnpd-nftables luci-app-upnp
 openvpn-openssl luci-app-openvpn ocserv luci-app-ocserv frpc luci-app-frpc
@@ -186,10 +186,9 @@ class ManifestChecks(unittest.TestCase):
         verify.check_manifest(self.packages(True), 'x86-64')
 
     def test_missing_chosen_backends_and_web_plugins_rejected(self):
-        required = ('hysteria', 'haproxy', 'ddns-scripts-services', 'nginx-mod-ubus', 'nginx-ssl-util', 'uwsgi', 'uwsgi-cgi-plugin',
+        required = ('haproxy', 'ddns-scripts-services', 'nginx-mod-ubus', 'nginx-ssl-util', 'uwsgi', 'uwsgi-cgi-plugin',
                     'uwsgi-luci-support', 'uwsgi-syslog-plugin', 'xray-core', 'geoview',
                     'v2ray-plugin', 'v2ray-geoip', 'v2ray-geosite', 'shadowsocks-rust-sslocal',
-                    'shadowsocks-libev-ss-local', 'shadowsocks-libev-ss-redir',
                     'shadowsocksr-libev-ssr-local', 'shadowsocksr-libev-ssr-redir',
                     'simple-obfs-client', 'ucode', 'ucode-mod-fs', 'ucode-mod-ubus', 'ucode-mod-uci')
         for name in required:
@@ -199,14 +198,20 @@ class ManifestChecks(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, name):
                     verify.check_manifest(packages, 'cmcc-rax3000m')
 
-    def test_independent_hysteria_required_on_both_platforms(self):
+    def test_removed_backend_rejected_on_both_platforms(self):
         for target in ('x86-64', 'cmcc-rax3000m'):
             with self.subTest(target=target):
                 packages = self.packages(target == 'x86-64')
-                del packages['hysteria']
+                packages['hysteria'] = 'fixture-version'
                 self.assertIn('sing-box', packages)
-                with self.assertRaisesRegex(ValueError, 'hysteria'):
+                with self.assertRaisesRegex(ValueError, 'excludes standalone backends'):
                     verify.check_manifest(packages, target)
+
+    def test_other_theme_is_rejected(self):
+        packages = self.packages()
+        packages['luci-theme-bootstrap'] = 'fixture-version'
+        with self.assertRaisesRegex(ValueError, 'fixed-theme policy'):
+            verify.check_manifest(packages, 'cmcc-rax3000m')
 
     def test_nftables_alternative_does_not_replace_json_backend(self):
         packages = self.packages()

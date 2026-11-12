@@ -135,14 +135,13 @@ for package in base-files boltwrt-defaults luci-base luci-theme-argon \
     nginx-ssl nginx-mod-luci nginx-mod-ubus nginx-ssl-util uwsgi uwsgi-cgi-plugin \
     uwsgi-luci-support uwsgi-syslog-plugin dnsmasq-full smartdns haproxy \
     openvpn-openssl ocserv frpc wireguard-tools sqm-scripts miniupnpd-nftables \
-    sing-box xray-core shadowsocks-rust-sslocal shadowsocks-libev-ss-local \
-    shadowsocks-libev-ss-redir shadowsocksr-libev-ssr-local \
+    sing-box xray-core shadowsocks-rust-sslocal shadowsocksr-libev-ssr-local \
     shadowsocksr-libev-ssr-redir simple-obfs-client v2ray-plugin; do
     apk info -e "$package" >/dev/null 2>&1 || fail "installed APK query failed: $package"
 done
 apk info -L boltwrt-defaults | grep -Fx 'etc/uci-defaults/09-boltwrt-haproxy' >/dev/null || fail 'installed defaults payload does not declare the consumed 09 hook'
 for backend in dnsmasq smartdns haproxy openvpn ocserv frpc wg miniupnpd \
-    sing-box xray sslocal ss-local ss-redir ssr-local ssr-redir obfs-local v2ray-plugin; do
+    sing-box xray sslocal ssr-local ssr-redir obfs-local v2ray-plugin; do
     backend_path=$(command -v "$backend") || fail "backend absent: $backend"
     [ -x "$backend_path" ] || fail "backend not executable: $backend"
 done

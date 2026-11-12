@@ -18,9 +18,8 @@ ROOT = Path(__file__).resolve().parent.parent
 SERVICE_PACKAGES = {
     "DNS": ("dnsmasq-full", "smartdns", "luci-app-smartdns"),
     "DDNS": ("ddns-scripts", "ddns-scripts-aliyun", "ddns-scripts-services", "luci-app-ddns"),
-    "proxy": ("luci-app-passwall2", "haproxy", "hysteria", "sing-box", "xray-core", "geoview", "v2ray-plugin",
+    "proxy": ("luci-app-passwall2", "haproxy", "sing-box", "xray-core", "geoview", "v2ray-plugin",
               "v2ray-geoip", "v2ray-geosite", "shadowsocks-rust-sslocal",
-              "shadowsocks-libev-ss-local", "shadowsocks-libev-ss-redir",
               "shadowsocksr-libev-ssr-local", "shadowsocksr-libev-ssr-redir", "simple-obfs-client"),
     "SQM": ("sqm-scripts", "luci-app-sqm", "kmod-sched-cake", "kmod-ifb"),
     "UPnP": ("miniupnpd-nftables", "luci-app-upnp"),
@@ -88,6 +87,11 @@ def check_manifest(packages, target):
     require("opkg" not in packages and any(p in packages for p in ("apk-mbedtls", "apk-openssl")),
             "manifest does not contain an APK-only package manager")
     require("uhttpd" not in packages, "unexpected second web server in image")
+    obsolete = {"hysteria", "naiveproxy", "tuic-client",
+                "shadowsocks-libev-ss-local", "shadowsocks-libev-ss-redir", "shadowsocks-libev-ss-server"} & packages.keys()
+    require(not obsolete, f"upstream policy excludes standalone backends: {sorted(obsolete)}")
+    extra_themes = {p for p in packages if p.startswith("luci-theme-") and p != "luci-theme-argon"}
+    require(not extra_themes, f"fixed-theme policy excludes: {sorted(extra_themes)}")
     for service, names in SERVICE_PACKAGES.items():
         missing = set(names) - packages.keys()
         require(not missing, f"{service}: missing actual backend/frontend packages: {sorted(missing)}")
