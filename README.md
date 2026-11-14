@@ -10,7 +10,7 @@ BoltWrt 是基于 OpenWrt 的路由器系统，提供中文管理界面，并集
 
 解开下载的 `.tar.gz` 包后，根据平台和启动方式选择镜像。
 
-4.1.0 的固件包同时提供 `-build.json` 构建与组件记录、`-SHA256SUMS` 文件校验清单，以及 `-installed-packages.tar.gz` 预装组件 APK 归档。发布页的 `SHA256SUMS` 用于核对外层固件压缩包。
+固件包包含镜像、软件包清单，以及 `-installed-packages.tar.gz` 预装组件 APK 归档。构建与组件记录可在 GitHub Actions 的 `BoltWrt-Checks_*` 产物中查看。发布页的 `SHA256SUMS` 用于核对外层固件压缩包。
 
 | 平台 | 镜像文件名结尾 |
 | --- | --- |

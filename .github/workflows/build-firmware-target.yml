@@ -237,10 +237,7 @@ jobs:
           name: BoltWrt-Firmware_${{ inputs.target }}
           path: |
             ${{ inputs.target_dir }}/boltwrt-*
-            ${{ inputs.target_dir }}/sha256sums
-            ${{ inputs.target_dir }}/profiles.json
-            ${{ inputs.target_dir }}/config.buildinfo
-            ${{ inputs.target_dir }}/feeds.buildinfo
-            ${{ inputs.target_dir }}/version.buildinfo
+            !${{ inputs.target_dir }}/boltwrt-*-build.json
+            !${{ inputs.target_dir }}/boltwrt-*-SHA256SUMS
           if-no-files-found: error
           overwrite: true
