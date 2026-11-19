@@ -54,6 +54,7 @@ jobs:
       - name: Check retained PassWall2 compatibility contracts
         run: |
           pw=feeds/BoltWrt/luci/applications/luci-app-passwall2
+          lua5.1 "$pw/tests/dns-runtime.lua" "$pw/root/usr/share/passwall2/helper_dnsmasq.lua"
           lua5.1 "$pw/tests/migration-401.lua" "$pw/luasrc/passwall2/migrate_401.lua"
           lua5.1 "$pw/tests/upstream-policy.lua" "$pw/luasrc/passwall2/migrate_401.lua"
           python3 tests/policy/check-source.py --packages feeds/BoltWrt --luci feeds/luci
