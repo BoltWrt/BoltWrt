@@ -54,6 +54,7 @@ jobs:
       - name: Check retained PassWall2 compatibility contracts
         run: |
           pw=feeds/BoltWrt/luci/applications/luci-app-passwall2
+          lua5.1 "$pw/tests/dns-runtime.lua" "$pw/root/usr/share/passwall2/helper_dnsmasq.lua"
           lua5.1 "$pw/tests/migration-401.lua" "$pw/luasrc/passwall2/migrate_401.lua"
           lua5.1 "$pw/tests/upstream-policy.lua" "$pw/luasrc/passwall2/migrate_401.lua"
           python3 tests/policy/check-source.py --packages feeds/BoltWrt --luci feeds/luci
@@ -237,10 +238,7 @@ jobs:
           name: BoltWrt-Firmware_${{ inputs.target }}
           path: |
             ${{ inputs.target_dir }}/boltwrt-*
-            ${{ inputs.target_dir }}/sha256sums
-            ${{ inputs.target_dir }}/profiles.json
-            ${{ inputs.target_dir }}/config.buildinfo
-            ${{ inputs.target_dir }}/feeds.buildinfo
-            ${{ inputs.target_dir }}/version.buildinfo
+            !${{ inputs.target_dir }}/boltwrt-*-build.json
+            !${{ inputs.target_dir }}/boltwrt-*-SHA256SUMS
           if-no-files-found: error
           overwrite: true
